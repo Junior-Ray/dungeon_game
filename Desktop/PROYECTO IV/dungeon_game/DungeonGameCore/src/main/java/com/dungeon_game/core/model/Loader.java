@@ -478,6 +478,7 @@ public class Loader extends Sala {
         ver[3] = new Point(0, 2);
         obj = new Imagen(950, 500, 240, 30, 1, null, null, 255);
         confirmar = new InputText(ver, new Point(95, 50), obj);
+        confirmar.setMode(InputText.InputMode.PASSWORD);
 
         ver = new Point[4];
         ver[0] = new Point(0, 0);
