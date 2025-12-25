@@ -4,6 +4,7 @@
  */
 package com.dungeon_game.core.logic;
 
+import com.dungeon_game.core.api.DriverRender;
 import com.dungeon_game.core.api.RenderProcessor;
 import com.dungeon_game.core.api.Updater;
 import com.dungeon_game.core.auth.ITokenStorage; // <--- NUEVO: Importar la interfaz
@@ -26,6 +27,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  */
 public class GameState {
     
+    
+    private volatile boolean pendingLogout = false; //Para el logout de la sala principal
     // --- NUEVO: Variable para la interfaz de almacenamiento ---
     private ITokenStorage tokenStorage;
     // ----------------------------------------------------------
@@ -34,6 +37,7 @@ public class GameState {
     
     private final List<Updater> toAdd = new ArrayList<>();
     private final List<Updater> toRemove = new ArrayList<>();
+    private String authToken;
 
     public void registerUpdater(Updater u) {
         if (u == null) return;
@@ -46,6 +50,12 @@ public class GameState {
         synchronized (toRemove) {
             toRemove.add(u);
         }
+    }
+    public void setAuthToken(String t){ 
+        this.authToken = t; 
+    }
+    public String getAuthToken(){ 
+        return authToken; 
     }
     private  DungeonGraph mapa;
     private NodoSala salaActual;
@@ -104,7 +114,13 @@ public class GameState {
     
     public void update() {
         actual.update();
-
+        if (pendingLogout) {
+            pendingLogout = false;
+            doLogoutAndGoLoader();
+            return;
+        }
+        
+        
         // aplicar altas/bajas pendientes (seguro)
         synchronized (toAdd) {
             for (Updater u : toAdd) {
@@ -125,6 +141,8 @@ public class GameState {
         if (cambioSala) {
             ChangeSala.getInstance().update();
         }
+        
+    
     }
     /** Salas vecinas a la sala actual (las que se pueden alcanzar en un movimiento). */
     public List<NodoSala> getSalasVecinas() {
@@ -183,6 +201,7 @@ public class GameState {
     
     private GameTransport transport;
     private String playerId;
+    private String userCode;
 
     // “buzón” thread-safe para mensajes que llegan del server
     private final ConcurrentLinkedQueue<String> inbox = new ConcurrentLinkedQueue<>();
@@ -230,5 +249,88 @@ public class GameState {
 
         transport.sendCommand("HELLO " + playerId);
     }
+    public boolean connectOnly(String host, int port, boolean online) {
+        if (transport != null) return true;
+        if (transportFactory == null) throw new IllegalStateException("TransportFactory no configurado");
+
+        if (online) {
+            transport = transportFactory.createOnline(host, port);
+            if (!transport.connect()) {
+                transport = transportFactory.createOffline();
+                return transport.connect();
+            }
+            return true;
+        } else {
+            transport = transportFactory.createOffline();
+            return transport.connect();
+        }
+    }
+    public void setPlayerId(String playerId) {
+        this.playerId = playerId;
+    }
+    public void setUserCode(String userCode) {
+        this.userCode = userCode;
+    }
+    public String getUserCode() {
+        return userCode;
+    }
+    public void irALoader() {
+        RenderProcessor.getInstance().eliminarTodo();
+        if (actual != null) actual.eliminarSala();
+
+        // fuerza loader
+        this.actual = Loader.getInstance();
+        this.actual.cargarIniciales();
+
+        ChangeSala.getInstance().startAnimation(1280, 720);
+        cambioSala = true;
+    }
+    public void requestLogout() {
+        pendingLogout = true;
+    }
+    private void doLogoutAndGoLoader() {
+        
+        
+        // 1) borrar token local
+        var storage = getTokenStorage();
+        if (storage != null) storage.borrar();
+
+        // 2) cerrar conexión
+        if (transport != null) {
+            try {
+                if (authToken != null && !authToken.isBlank()) {
+                    transport.sendCommand("LOGOUT " + authToken);
+                } else {
+                    transport.sendCommand("QUIT");
+                }
+            } catch (Exception ignored) {}
+            try { transport.close(); } catch (Exception ignored) {}
+        }
+
+        // 3) reset state
+        transport = null;
+        playerId = null;
+        userCode = null;
+        authToken = null;
+
+        // 4) MUY importante: limpiar input/render antes de cargar loader
+        inbox.clear();           // IMPORTANTÍSIMO
+        Loader.resetForReentry();    // IMPORTANTÍSIMO
+
+        irASala(Loader.getInstance()); // ✅ aquí ya queda clickeable
+        
+        
+    }
+    public void irASala(Sala nueva) {
+         InterpreterEvent.getInstance().setMinActiveLayer(0);
+        RenderProcessor.getInstance().eliminarTodo();
+        if (actual != null) actual.eliminarSala();
+        actual = nueva;
+        actual.cargarIniciales();
+        ChangeSala.getInstance().startAnimation(1280, 720);
+        cambioSala = true;
+    }
+
+    
     
 }

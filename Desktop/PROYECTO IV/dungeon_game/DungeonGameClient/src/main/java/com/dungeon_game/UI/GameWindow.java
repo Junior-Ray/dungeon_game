@@ -30,6 +30,8 @@ public class GameWindow {
     public GameWindow(String title){
         AudioManager audioManager = AudioManager.getInstance();
         audioManager.setAudioPlayer(new JavaAudioPlayer());
+        // INYECCIÓN DE DEPENDENCIAS (Obligatorio)
+        // Conectamos el cerebro (Client) con el cuerpo (Core)
         AuthManager.setService(new ClientAuthService());
         GameState.getInstance().setTokenStorage(new SessionStorage());
         

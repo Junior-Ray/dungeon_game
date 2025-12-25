@@ -22,19 +22,25 @@ import java.util.List;
  */
 public class SolicitudAmistadDAO {
 
-    public boolean existePendienteEntre(String emisor, String receptor) throws SQLException {
+    public boolean existePendienteEntre(String a, String b) throws SQLException {
         String sql = """
             SELECT 1
             FROM solicitudes_amistad
-            WHERE emisor_codigo = ? AND receptor_codigo = ?
+            WHERE (
+                  (emisor_codigo = ? AND receptor_codigo = ?)
+               OR (emisor_codigo = ? AND receptor_codigo = ?)
+            )
               AND estado = 'PENDIENTE'
-            """;
+            LIMIT 1
+        """;
 
         try (Connection conn = Database.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            ps.setString(1, emisor);
-            ps.setString(2, receptor);
+            ps.setString(1, a);
+            ps.setString(2, b);
+            ps.setString(3, b);
+            ps.setString(4, a);
 
             try (ResultSet rs = ps.executeQuery()) {
                 return rs.next();
@@ -43,59 +49,86 @@ public class SolicitudAmistadDAO {
     }
     public SolicitudAmistad crearSolicitud(String emisorCodigo, String receptorCodigo) throws SQLException {
         String sql = """
-            INSERT INTO solicitudes_amistad (emisor_codigo, receptor_codigo, estado, fecha_envio)
-            VALUES (?, ?, 'PENDIENTE', CURRENT_TIMESTAMP)
-            """;
-
-        SolicitudAmistad solicitud = new SolicitudAmistad();
-        solicitud.setEmisorCodigo(emisorCodigo);
-        solicitud.setReceptorCodigo(receptorCodigo);
-        solicitud.setEstado(EstadoSolicitud.PENDIENTE);
-        solicitud.setFechaEnvio(LocalDateTime.now());
+            INSERT INTO solicitudes_amistad (emisor_codigo, receptor_codigo, estado)
+            VALUES (?, ?, 'PENDIENTE')
+        """;
 
         try (Connection conn = Database.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
             ps.setString(1, emisorCodigo);
             ps.setString(2, receptorCodigo);
+
             ps.executeUpdate();
 
-            // Obtener el ID AUTOINCREMENT generado
+            int idGenerado = -1;
             try (ResultSet rs = ps.getGeneratedKeys()) {
-                if (rs.next()) {
-                    solicitud.setId(rs.getInt(1));
-                }
+                if (rs.next()) idGenerado = rs.getInt(1);
             }
+
+            SolicitudAmistad s = new SolicitudAmistad();
+            s.setId(idGenerado);
+            s.setEmisorCodigo(emisorCodigo);
+            s.setReceptorCodigo(receptorCodigo);
+            s.setEstado(EstadoSolicitud.PENDIENTE);
+            s.setFechaEnvio(LocalDateTime.now());
+            s.setFechaRespuesta(null);
+
+            return s;
         }
-
-        return solicitud;
     }
-    public List<SolicitudAmistad> obtenerSolicitudesPendientesDe(int idReceptor) throws SQLException {
+     public List<SolicitudAmistad> obtenerPendientesRecibidas(String receptorCodigo) throws SQLException {
         String sql = """
-            SELECT id, emisor_id, receptor_id, estado, fecha_envio, fecha_respuesta
+            SELECT id, emisor_codigo, receptor_codigo, estado, fecha_envio, fecha_respuesta
             FROM solicitudes_amistad
-            WHERE receptor_id = ?
+            WHERE receptor_codigo = ?
               AND estado = 'PENDIENTE'
-            """;
+            ORDER BY fecha_envio DESC
+        """;
 
-        List<SolicitudAmistad> solicitudes = new ArrayList<>();
+        List<SolicitudAmistad> list = new ArrayList<>();
 
         try (Connection conn = Database.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            ps.setInt(1, idReceptor);
+            ps.setString(1, receptorCodigo);
 
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    solicitudes.add(mapRowToSolicitud(rs));
+                    list.add(mapRow(rs));
                 }
             }
         }
-        return solicitudes;
+        return list;
+    }
+     public List<SolicitudAmistad> obtenerPendientesEnviadas(String emisorCodigo) throws SQLException {
+        String sql = """
+            SELECT id, emisor_codigo, receptor_codigo, estado, fecha_envio, fecha_respuesta
+            FROM solicitudes_amistad
+            WHERE emisor_codigo = ?
+              AND estado = 'PENDIENTE'
+            ORDER BY fecha_envio DESC
+        """;
+
+        List<SolicitudAmistad> list = new ArrayList<>();
+
+        try (Connection conn = Database.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setString(1, emisorCodigo);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    list.add(mapRow(rs));
+                }
+            }
+        }
+        return list;
     }
 
+
     // Opcional para más adelante:
-    public void actualizarEstado(int idSolicitud, EstadoSolicitud nuevoEstado) throws SQLException {
+    public boolean actualizarEstado(int idSolicitud, EstadoSolicitud nuevoEstado) throws SQLException {
         String sql = """
             UPDATE solicitudes_amistad
             SET estado = ?, fecha_respuesta = NOW()
@@ -107,7 +140,7 @@ public class SolicitudAmistadDAO {
 
             ps.setString(1, nuevoEstado.name()); // "PENDIENTE", "ACEPTADA", ...
             ps.setInt(2, idSolicitud);
-            ps.executeUpdate();
+            return ps.executeUpdate() > 0;
         }
     }
     public void aceptarSolicitud(int idSolicitud) throws SQLException {
@@ -120,25 +153,40 @@ public class SolicitudAmistadDAO {
 
     // ===================== MAPEO RESULTSET -> OBJETO =====================
 
-    private SolicitudAmistad mapRowToSolicitud(ResultSet rs) throws SQLException {
-        SolicitudAmistad s = new SolicitudAmistad();
+    public SolicitudAmistad obtenerPorId(int solicitudId) throws SQLException {
+        String sql = """
+            SELECT id, emisor_codigo, receptor_codigo, estado, fecha_envio, fecha_respuesta
+            FROM solicitudes_amistad
+            WHERE id = ?
+            LIMIT 1
+        """;
 
-        s.setId(rs.getInt("id"));  
+        try (Connection conn = Database.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, solicitudId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                return mapRow(rs);
+            }
+        }
+    }
+    private SolicitudAmistad mapRow(ResultSet rs) throws SQLException {
+        SolicitudAmistad s = new SolicitudAmistad();
+        s.setId(rs.getInt("id"));
         s.setEmisorCodigo(rs.getString("emisor_codigo"));
         s.setReceptorCodigo(rs.getString("receptor_codigo"));
 
-        String estadoStr = rs.getString("estado");
-        s.setEstado(EstadoSolicitud.valueOf(estadoStr));  // "PENDIENTE", "ACEPTADA", etc.
+        String est = rs.getString("estado");
+        s.setEstado(EstadoSolicitud.valueOf(est));
 
         Timestamp tsEnvio = rs.getTimestamp("fecha_envio");
-        if (tsEnvio != null) {
-            s.setFechaEnvio(tsEnvio.toLocalDateTime());
-        }
+        if (tsEnvio != null) s.setFechaEnvio(tsEnvio.toLocalDateTime());
 
         Timestamp tsResp = rs.getTimestamp("fecha_respuesta");
-        if (tsResp != null) {
-            s.setFechaRespuesta(tsResp.toLocalDateTime());
-        }
+        if (tsResp != null) s.setFechaRespuesta(tsResp.toLocalDateTime());
+        else s.setFechaRespuesta(null);
 
         return s;
     }

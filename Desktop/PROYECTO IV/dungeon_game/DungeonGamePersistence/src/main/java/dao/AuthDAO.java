@@ -78,4 +78,20 @@ public class AuthDAO {
             ps.executeUpdate();
         }
     }
+    public void guardarToken(String token, String userCode, long expira) throws SQLException {
+        String sql = """
+            INSERT INTO sesiones (token, usuario_codigo, fecha_expiracion)
+            VALUES (?, ?, ?)
+        """;
+
+        try (Connection c = Database.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, token);
+            ps.setString(2, userCode);
+            ps.setLong(3, expira);
+            ps.executeUpdate();
+        }
+    }
+
+    
 }

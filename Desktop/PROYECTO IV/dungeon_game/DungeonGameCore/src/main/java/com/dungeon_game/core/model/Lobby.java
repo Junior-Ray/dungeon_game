@@ -210,6 +210,13 @@ public class Lobby extends Sala {
             InterpreterEvent.getInstance().setMinActiveLayer(9);
             DriverRender.getInstance().string();
         });
+        salir.setOnClickAction(() -> {
+            //GameState.getInstance().iniciarGraficos();
+            //
+            
+            GameState.getInstance().requestLogout();
+        });
+
         noSalir.setOnClickAction(() -> {
             InterpreterEvent.getInstance().setMinActiveLayer(1);
             DriverRender.getInstance().eliminarNodo(semiFondo);

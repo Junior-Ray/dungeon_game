@@ -7,6 +7,7 @@ package com.dungeon_game.core.logic;
 import com.dungeon_game.core.api.Updater;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Predicate;
 
 /**
@@ -35,7 +36,8 @@ public class ClientMessageBus implements Updater {
         }
     }
 
-    private final List<Sub> subs = new ArrayList<>();
+    // ✅ Thread-safe para iterar mientras se agregan/quitan subs
+    private final CopyOnWriteArrayList<Sub> subs = new CopyOnWriteArrayList<>();
     private boolean running = false;
 
     public void start() {
@@ -45,7 +47,12 @@ public class ClientMessageBus implements Updater {
     }
 
     public void subscribe(Predicate<String> filter, Listener listener) {
+        if (filter == null || listener == null) return;
         subs.add(new Sub(filter, listener));
+    }
+    public void unsubscribe(Listener listener) {
+        if (listener == null) return;
+        subs.removeIf(s -> s.listener == listener);
     }
 
     @Override
@@ -59,10 +66,14 @@ public class ClientMessageBus implements Updater {
     }
 
     private void dispatch(String line) {
-        for (Sub s : subs) {
+        List<Sub> snapshot = new ArrayList<>(subs);
+        for (Sub s : snapshot) {
             if (s.filter.test(line)) {
                 s.listener.onMessage(line);
             }
         }
+    }
+    public void clearSubscriptions() {
+        subs.clear();
     }
 }

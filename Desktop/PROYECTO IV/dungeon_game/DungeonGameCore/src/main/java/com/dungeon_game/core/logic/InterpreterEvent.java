@@ -111,15 +111,17 @@ public class InterpreterEvent {
         if (InputMouse.getInstance().isMouseInWindow()) {
             // Buscamos el objeto en la capa entre 0 y 9 (UI)
             
-            //System.out.println((obj!=null)?obj.getVisualId():null);
+            
             for (int layer = MAX_LAYER; layer >= minActiveLayer; layer--) {
+                
                 VisualRender cand = grid.getElement(dir, layer);
                 obj = grid.getElement(dir, layer);
+                
                 if (cand == null) continue;
 
                 // Guardamos el primer hit
                 obj = cand;
-                
+                System.out.println((obj!=null)?obj.getVisualId():null);
                 if (cand instanceof AbstractUIComponent) {
                     break;
                 }

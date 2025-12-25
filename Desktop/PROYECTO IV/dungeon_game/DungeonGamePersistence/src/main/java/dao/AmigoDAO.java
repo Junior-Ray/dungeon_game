@@ -22,17 +22,14 @@ import java.util.List;
 public class AmigoDAO {
 
     public void agregarAmistad(String cod1, String cod2) throws SQLException {
-        // Guardamos solo una fila por amistad, ordenando códigos para evitar duplicar lógica
-        String a = cod1.compareTo(cod2) < 0 ? cod1 : cod2;
-        String b = cod1.compareTo(cod2) < 0 ? cod2 : cod1;
-
-        String sql = "INSERT OR IGNORE INTO amigos (usuario_codigo, amigo_codigo) VALUES (?, ?)";
-
-        try (Connection conn = Database.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, a);
-            ps.setString(2, b);
-            ps.executeUpdate();
+        String sql = "INSERT IGNORE INTO amigos (usuario_codigo, amigo_codigo) VALUES (?, ?)";
+        try (Connection conn = Database.getConnection()) {
+            conn.setAutoCommit(false);
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, cod1); ps.setString(2, cod2); ps.executeUpdate();
+                ps.setString(1, cod2); ps.setString(2, cod1); ps.executeUpdate();
+            }
+            conn.commit();
         }
     }
     public List<String[]> listarAmistades() throws SQLException {
@@ -51,38 +48,25 @@ public class AmigoDAO {
     }
     public List<Usuario> obtenerAmigosDe(String codigoUsuario) throws SQLException {
         String sql = """
-            SELECT u.codigo, u.username, u.contrasena, u.avatar_path
+            SELECT u.codigo, u.username, u.email, u.avatar_path
             FROM amigos a
             JOIN usuarios_chat u ON u.codigo = a.amigo_codigo
             WHERE a.usuario_codigo = ?
-            
-            UNION
-            
-            SELECT u2.codigo, u2.username, u2.contrasena, u2.avatar_path
-            FROM amigos a2
-            JOIN usuarios_chat u2 ON u2.codigo = a2.usuario_codigo
-            WHERE a2.amigo_codigo = ?
-              AND u2.codigo <> ?
             """;
 
         List<Usuario> lista = new ArrayList<>();
-
         try (Connection conn = Database.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
             ps.setString(1, codigoUsuario);
-            ps.setString(2, codigoUsuario);
-            ps.setString(3, codigoUsuario);
-
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    Usuario amigo = new Usuario(
+                    lista.add(new Usuario(
                             rs.getString("codigo"),
                             rs.getString("username"),
-                            rs.getString("contrasena"),
+                            null, // NO mandes contrasena
                             rs.getString("avatar_path")
-                    );
-                    lista.add(amigo);
+                    ));
                 }
             }
         }

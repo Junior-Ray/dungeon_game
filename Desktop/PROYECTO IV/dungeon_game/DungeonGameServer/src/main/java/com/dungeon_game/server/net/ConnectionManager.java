@@ -12,6 +12,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  *
@@ -21,7 +22,8 @@ public class ConnectionManager {
 
     private int port;
     private ServerContext context;
-    private List<PlayerThread> players = new ArrayList<>();
+    
+    private final ConcurrentHashMap<String, PlayerThread> playersById  = new ConcurrentHashMap<>();
     private volatile boolean running = true; // :0
     
     
@@ -46,8 +48,7 @@ public class ConnectionManager {
                 System.out.println("[Server] Nueva conexión desde " + socket.getRemoteSocketAddress());
 
                 PlayerThread playerThread = new PlayerThread(socket, context, this);
-                players.add(playerThread);
-                new Thread(playerThread, "PlayerThread-" + players.size()).start();
+                new Thread(playerThread, "PlayerThread-" + socket.getRemoteSocketAddress()).start();
             }
 
         } catch (IOException e) {
@@ -59,28 +60,41 @@ public class ConnectionManager {
         running = false;
         // No cierro players aquí por simplicidad, se podría mejorar
     }
-    public synchronized void broadcast(String message) {
-        for (PlayerThread pt : players) {
+
+    public void registerPlayer(String playerId, PlayerThread pt) {
+        if (playerId == null || playerId.isBlank() || pt == null) return;
+
+        PlayerThread prev = playersById.put(playerId, pt);
+        
+        if (prev != null && prev != pt) {
+            System.out.println("[Server] Reemplazando conexión previa de " + playerId);
+            prev.requestStop(); // 👈 lo agregamos en PlayerThread
+        }
+        System.out.println("[Server][registerPlayer] " + playerId + " replaced=" + (prev != null));
+
+    }
+     public void unregisterPlayer(String playerId, PlayerThread pt) {
+        if (playerId == null || playerId.isBlank() || pt == null) return;
+
+        boolean removed = playersById.remove(playerId, pt); // remove seguro
+        if (removed) {
+            System.out.println("[Server] unregister ok: " + playerId);
+        }
+    }
+     public void broadcast(String message) {
+        for (PlayerThread pt : playersById.values()) {
             pt.sendLine(message);
         }
     }
-    public synchronized void sendTo(String playerId, String message) {
-        boolean sent = false;
-        for (PlayerThread pt : players) {
-            String pid = pt.getPlayerId();
-            if (pid != null && pid.equals(playerId)) {
-                pt.sendLine(message);
-                System.out.println("[Server] sendTo " + pid + " => " + message);
-                sent = true;
-                break;
 
-            }
-        }
-        if (!sent) {
+    public void sendTo(String playerId, String message) {
+        PlayerThread pt = playersById.get(playerId);
+
+        if (pt != null) {
+            pt.sendLine(message);
+            System.out.println("[Server] sendTo " + playerId + " => " + message);
+        } else {
             System.out.println("[Server][WARN] sendTo failed, no thread for " + playerId);
         }
-    }
-    public synchronized void removePlayer(PlayerThread pt) {
-        players.remove(pt);
     }
 }

@@ -15,7 +15,7 @@ public class Database {
     
     // REVISA TUS CREDENCIALES:
     private static final String USER = "root";  // Usuario por defecto en XAMPP/MySQL local
-    private static final String PASS = "1234";  // <-- ¿Seguro que es 1234? Si usas XAMPP suele ser "" (vacío)
+    private static final String PASS = "12345";  // <-- ¿Seguro que es 1234? Si usas XAMPP suele ser "" (vacío)
 
     public static Connection getConnection() throws SQLException {
         try {

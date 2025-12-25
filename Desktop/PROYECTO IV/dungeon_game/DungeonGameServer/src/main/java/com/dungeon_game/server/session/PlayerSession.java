@@ -16,6 +16,7 @@ import java.util.Set;
 public class PlayerSession {
 
  private final String playerId;   // username o código único
+ private String userCode;
 
     // -------------------------------
     // Estado global
@@ -78,6 +79,12 @@ public class PlayerSession {
 
     public int getVida() {
         return vida;
+    }
+    public String getUserCode(){
+        return userCode;
+    }
+    public void setUserCode(String userCode){
+        this.userCode = userCode;
     }
 
     public Set<String> getPendingInvitations() {

@@ -5,9 +5,12 @@
 package com.dungeon_game.server.net;
 
 
+import com.dungeon_game.core.model.Usuario_y_Chat.Usuario;
 import com.dungeon_game.server.ServerContext;
 import com.dungeon_game.server.session.PlayerMode;
 import com.dungeon_game.server.session.PlayerSession;
+import dao.AuthDAO;
+import dao.UsuarioDAO;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -30,6 +33,7 @@ public class PlayerThread implements Runnable {
     private BufferedReader in;
     private PrintWriter out;
     private volatile boolean running = true;
+    private String boundPlayerId;
     /**
      * @param args the command line arguments
      */
@@ -37,6 +41,10 @@ public class PlayerThread implements Runnable {
         this.socket = socket;
         this.context = context;
         this.manager = manager;
+    }
+    public void requestStop() {
+        running = false;
+        try { socket.close(); } catch (Exception ignored) {}
     }
     public String getPlayerId() {
         return (session != null) ? session.getPlayerId() : null;
@@ -47,7 +55,7 @@ public class PlayerThread implements Runnable {
             in  = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()), true);
 
-            sendLine("WELCOME DungeonGameServer v0.1");
+            sendLine("WELCOME DungeonGameServer v0.2");
             sendLine("Usa: HELLO, INVITE, ACCEPT, DECLINE, PARTY, PARTY_LEAVE, START_DUNGEON, END_DUNGEON, MOVE <idSala>, WHERE, WHO, QUIT");
 
 
@@ -80,6 +88,11 @@ public class PlayerThread implements Runnable {
                     case "PARTY_CHAT" -> handlePartyChat(parts.length > 1 ? parts[1] : null);
                     case "WHISPER" -> handleWhisper(parts.length > 1 ? parts[1] : null);
                     
+                    //Cosas donde se usa la base de datos del servidor
+                    case "LOGIN" -> handleLogin(parts.length > 1 ? parts[1] : null);
+                    case "AUTH_TOKEN" -> handleAuthToken(parts.length > 1 ? parts[1] : null);
+                    case "REGISTER" -> handleRegister(parts.length > 1 ? parts[1] : null);
+                    case "LOGOUT" -> handleLogout(parts.length > 1 ? parts[1] : null);
                     case "QUIT"  -> {
                         sendLine("BYE");
                         running = false;
@@ -139,12 +152,19 @@ public class PlayerThread implements Runnable {
             }
 
             // 3) Sacarlo del ConnectionManager (threads activos :V)
-            manager.removePlayer(this);
+            if (boundPlayerId != null) {
+                manager.unregisterPlayer(boundPlayerId, this);
+            }
 
             System.out.println("[Server] Conexión cerrada con " + pid);
+            System.out.println("[Server][finally] pid=" + pid + " bound=" + boundPlayerId + " partyId=" + partyId);
         }
     }
     private void handleHello(String nombre) {
+        if (session != null && boundPlayerId != null) {
+            sendLine("OK HELLO " + boundPlayerId);
+            return;
+        }
         if (nombre == null || nombre.isBlank()) {
             sendLine("ERROR Debes enviar HELLO <nombre>");
             return;
@@ -160,6 +180,9 @@ public class PlayerThread implements Runnable {
         context.getGameEngine().registrarJugador(id);
 
         sendLine("OK HELLO " + id);
+        this.boundPlayerId = id;
+        manager.registerPlayer(id, this);
+        System.out.println("[Server][HELLO] register " + id + " thread=" + Thread.currentThread().getName());
     }
 
     private void handleMove(String destino) {
@@ -816,6 +839,174 @@ public class PlayerThread implements Runnable {
         }
 
     }
+    private void handleLogin(String args) {
+        if (args == null) {
+            sendLine("LOGIN_FAIL Datos incompletos");
+            return;
+        }
+
+        String[] p = args.split("\\s+", 2);
+        if (p.length < 2) {
+            sendLine("LOGIN_FAIL Datos incompletos");
+            return;
+        }
+
+        String username = p[0];
+        String password = p[1];
+
+        try {
+            UsuarioDAO usuarioDAO = new UsuarioDAO();
+            Usuario u = usuarioDAO.buscarPorCredenciales(username, password);
+
+            if (u == null) {
+                sendLine("LOGIN_FAIL Credenciales inválidas");
+                return;
+            }
+
+            // Crear token
+            String token = java.util.UUID.randomUUID().toString();
+            long expira = System.currentTimeMillis() + (1000L * 60 * 60 * 24); // 24h
+
+            AuthDAO authDAO = new AuthDAO();
+            authDAO.guardarToken(token, u.getCodigo(), expira);
+
+            // Crear sesión lógica
+            this.session = context.getSessionManager()
+                    .getOrCreateSession(u.getUsername());
+            session.setUserCode(u.getCodigo());
+            session.enterLobby();
+
+            this.boundPlayerId = u.getUsername();
+            manager.registerPlayer(boundPlayerId, this);
+
+            sendLine("LOGIN_OK " + token + " " + u.getUsername() + " " + u.getCodigo());
+
+            System.out.println("[LOGIN_OK] " + u.getUsername());
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            sendLine("LOGIN_FAIL Error interno");
+        }
+    }
+    private void handleAuthToken(String token) {
+        try {
+            AuthDAO authDAO = new AuthDAO();
+            String userCode = authDAO.obtenerUsuarioPorToken(token);
+
+            if (userCode == null) {
+                sendLine("AUTH_FAIL");
+                return;
+            }
+
+            UsuarioDAO usuarioDAO = new UsuarioDAO();
+            Usuario u = usuarioDAO.buscarPorCodigo(userCode);
+
+            if (u == null) {
+                sendLine("AUTH_FAIL");
+                return;
+            }
+
+            session = context.getSessionManager()
+                    .getOrCreateSession(u.getUsername());
+            session.setUserCode(userCode);
+            session.enterLobby();
+
+            boundPlayerId = u.getUsername();
+            manager.registerPlayer(boundPlayerId, this);
+
+            sendLine("AUTH_OK " + u.getUsername() + " " + userCode);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            sendLine("AUTH_FAIL");
+        }
+    }
+    private void handleRegister(String args) {
+        if (args == null || args.isBlank()) {
+            sendLine("REGISTER_FAIL Datos incompletos");
+            return;
+        }
+
+        // REGISTER user email pass  (pass puede tener espacios? normalmente no)
+        String[] p = args.split("\\s+", 3);
+        if (p.length < 3) {
+            sendLine("REGISTER_FAIL Uso: REGISTER <username> <email> <password>");
+            return;
+        }
+
+        String username = p[0].trim();
+        String email    = p[1].trim();
+        String password = p[2].trim();
+
+        if (username.isEmpty() || email.isEmpty() || password.isEmpty()) {
+            sendLine("REGISTER_FAIL Datos incompletos");
+            return;
+        }
+
+        try {
+            UsuarioDAO usuarioDAO = new UsuarioDAO();
+
+            // Validaciones mínimas en server (además de las del cliente)
+            if (usuarioDAO.existeUsername(username)) {
+                sendLine("REGISTER_FAIL Username ya existe");
+                return;
+            }
+            if (usuarioDAO.existeEmail(email)) {
+                sendLine("REGISTER_FAIL Email ya existe");
+                return;
+            }
+
+            // Crear usuario
+            Usuario u = usuarioDAO.crearUsuario(username, email, password, "default_avatar.png");
+
+            // Crear token (igual que login)
+            String token = java.util.UUID.randomUUID().toString();
+            long expira = System.currentTimeMillis() + (1000L * 60 * 60 * 24); // 24h
+
+            AuthDAO authDAO = new AuthDAO();
+            authDAO.guardarToken(token, u.getCodigo(), expira);
+
+            // Crear sesión lógica (queda logueado automáticamente)
+            this.session = context.getSessionManager().getOrCreateSession(u.getUsername());
+            session.setUserCode(u.getCodigo());
+            session.enterLobby();
+
+            this.boundPlayerId = u.getUsername();
+            manager.registerPlayer(boundPlayerId, this);
+
+            sendLine("REGISTER_OK " + token + " " + u.getUsername() + " " + u.getCodigo());
+            System.out.println("[REGISTER_OK] " + u.getUsername());
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            sendLine("REGISTER_FAIL Error interno");
+        }
+    }
+    private void handleLogout(String token) {
+        try {
+            if (token != null && !token.isBlank()) {
+                AuthDAO.eliminarToken(token.trim()); // o authDAO.eliminarToken(...)
+            }
+
+            // Limpieza de session igual que en finally:
+            if (session != null) {
+                String pid = session.getPlayerId();
+                context.getSessionManager().removeSession(pid);
+            }
+
+            sendLine("LOGOUT_OK");
+        } catch (Exception e) {
+            e.printStackTrace();
+            sendLine("LOGOUT_FAIL");
+        } finally {
+            running = false;
+            try { socket.close(); } catch (Exception ignored) {}
+        }
+    }
+
+
+
+
 
 
 

@@ -121,6 +121,6 @@ public class DriverRender {
 
             t = t.getSgte();
         }
-       // System.out.println("ORDEN: ID" + resultado);
+        System.out.println("ORDEN: ID" + resultado);
     }
 }

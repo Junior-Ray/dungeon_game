@@ -4,20 +4,20 @@
  */
 package com.dungeon_game.core.model;
 
-import com.dungeon_game.core.auth.AuthManager;
+
 import com.dungeon_game.core.api.CroppedImage;
 import com.dungeon_game.core.api.RenderProcessor;
 import com.dungeon_game.core.api.Updater;
 import com.dungeon_game.core.audio.AudioManager;
 import com.dungeon_game.core.audio.MusicTrack;
-import com.dungeon_game.core.auth.ITokenStorage;
 import com.dungeon_game.core.components.AbstractUIComponent;
 import com.dungeon_game.core.components.InputText;
 import com.dungeon_game.core.components.UIButton;
 import com.dungeon_game.core.data.AntFromLeft;
 import com.dungeon_game.core.data.RenderableVisual;
+import com.dungeon_game.core.logic.ClientMessageBus;
 import com.dungeon_game.core.logic.GameState;
-import com.dungeon_game.core.model.Usuario_y_Chat.Usuario;
+
 import com.dungeon_game.core.util.ValidadorDatos;
 import java.awt.Point;
 import java.util.ArrayList;
@@ -55,7 +55,7 @@ public class Loader extends Sala {
     private UIButton recuperar;
     private UIButton iniciar;
     private UIButton registrarse;
-
+    private static boolean authSubscribed = false;
     private PanelActual panel = PanelActual.NINGUNO;
 
     private Loader() {
@@ -71,6 +71,30 @@ public class Loader extends Sala {
 
     @Override
     public void cargarIniciales() {
+        listaInicio = null;
+        listaRegistro = null;
+        ant_inicio = null;
+        ant_registro = null;
+        panel = PanelActual.NINGUNO;
+        if (list == null) list = new ArrayList<>();
+
+        panel = PanelActual.NINGUNO;
+        if (!authSubscribed) {
+            authSubscribed = true;
+        ClientMessageBus.getInstance().start();
+        ClientMessageBus.getInstance().subscribe(
+            line -> line != null && (
+                line.startsWith("LOGIN_OK") ||
+                line.startsWith("LOGIN_FAIL") ||
+                line.startsWith("AUTH_OK") ||
+                line.startsWith("AUTH_FAIL") ||
+                line.startsWith("REGISTER_OK") ||
+                line.startsWith("REGISTER_FAIL")
+            ),
+            this::onAuthLine
+        );
+     
+    }
         // ====================================================================
         // 1. INICIO AUTO-LOGIN
         // ====================================================================
@@ -88,22 +112,15 @@ public class Loader extends Sala {
             System.out.println("👀 [DEBUG] Token leído del archivo: " + token);
 
             if (token != null) {
-                // 3. Validar con AuthManager
-                System.out.println("🔄 [DEBUG] Validando token con el servidor...");
-                Usuario u = AuthManager.loginConToken(token);
-
-                if (u != null) {
-                    System.out.println("✅ [DEBUG] ¡LOGIN EXITOSO! Usuario: " + u.getUsername());
+                boolean ok = GameState.getInstance().connectOnly("localhost", 5000, true);
+                if (ok) {
+                    GameState.getInstance().getTransport().sendCommand("AUTH_TOKEN " + token);
+                    System.out.println("🔄 [DEBUG] Enviando AUTH_TOKEN al servidor...");
+                    // IMPORTANTE: aquí NO haces siguienteSala()
+                    // el cambio a lobby lo hace onAuthLine cuando llegue AUTH_OK
                     
-                    // Conectar y Saltar
-                    GameState.getInstance().connectAfterLogin("localhost", 5000, u.getUsername(), true);
-                    GameState.getInstance().siguienteSala();
-                    AudioManager.getInstance().playMusic(MusicTrack.MAIN_MENU,true);
-                    System.out.println("🚀 [DEBUG] Saltando al Lobby...");
-                    return; // <--- IMPORTANTE
                 } else {
-                    System.err.println("⛔ [DEBUG] Token rechazado (Expirado o no existe en BD).");
-                    storage.borrar();
+                    System.err.println("❌ No se pudo conectar al servidor para validar token.");
                 }
             } else {
                 System.out.println("📂 [DEBUG] No hay token guardado (es la primera vez o cerraste sesión).");
@@ -275,8 +292,8 @@ public class Loader extends Sala {
 
     @Override
     public void commonUpdate() {
-        for (Updater updaters : list) {
-            updaters.update();
+        if (list != null) {
+            for (Updater u : list) u.update();
         }
         if (listaInicio != null) {
             for (AbstractUIComponent updaters : listaInicio) {
@@ -385,23 +402,16 @@ public class Loader extends Sala {
 
             // 3. Llamada al Backend (AuthManager)
             // AuthManager.login devuelve un objeto Usuario si es correcto, o null si falló.
-            Usuario usuarioLogueado = AuthManager.login(user, pass);
-
-            if (usuarioLogueado != null) {
-                // --- CASO ÉXITO ---
-
-                // Conectar al juego usando el nombre real del usuario recuperado de la BD
-                // Nota: Ajusta "localhost" y el puerto si es necesario
-                GameState.getInstance().connectAfterLogin("localhost", 5000, usuarioLogueado.getUsername(), true);
-
-                // Cambiar a la siguiente sala (Lobby)
-                AudioManager.getInstance().playMusic(MusicTrack.MAIN_MENU,true);
-                GameState.getInstance().siguienteSala();
-
-            } else {
-                // --- CASO ERROR ---
-                JOptionPane.showMessageDialog(null, "Usuario o contraseña incorrectos.");
+            boolean ok = GameState.getInstance().connectOnly("localhost", 5000, true);
+            if (!ok) {
+                JOptionPane.showMessageDialog(null, "No se pudo conectar al servidor.");
+                return;
             }
+
+            GameState.getInstance().getTransport().sendCommand("LOGIN " + user + " " + pass);
+            System.out.println("[Loader] Enviando LOGIN al servidor...");
+            // No hagas siguienteSala aquí.
+            // onAuthLine hará el cambio cuando llegue LOGIN_OK.
         });
         registrarse.setOnClickAction(() -> {
             // cerrar inicio
@@ -478,7 +488,6 @@ public class Loader extends Sala {
         ver[3] = new Point(0, 2);
         obj = new Imagen(950, 500, 240, 30, 1, null, null, 255);
         confirmar = new InputText(ver, new Point(95, 50), obj);
-        confirmar.setMode(InputText.InputMode.PASSWORD);
 
         ver = new Point[4];
         ver[0] = new Point(0, 0);
@@ -489,16 +498,28 @@ public class Loader extends Sala {
         registrarse = new UIButton(null, ver, new Point(95, 54), obj);
 
         registrarse.setOnClickAction(()->{
-            String mensaje = ValidadorDatos.registrarUsuario(nombre.getText(), correo.getText(), contraseña.getText(), confirmar.getText());
-            if(mensaje==null){
-                String error = AuthManager.registrar(nombre.getText(),  correo.getText(), contraseña.getText(), confirmar.getText());
-                if(error==null){
-                    AudioManager.getInstance().playMusic(MusicTrack.MAIN_MENU,true);
-                    GameState.getInstance().siguienteSala();
-                } else
-                    JOptionPane.showMessageDialog(null, error);
-            } else
+            String u = nombre.getText().trim();
+            String e = correo.getText().trim();
+            String p1 = contraseña.getText().trim();
+            String p2 = confirmar.getText().trim();
+
+            // 1) validación local
+            String mensaje = ValidadorDatos.registrarUsuario(u, e, p1, p2);
+            if (mensaje != null) {
                 JOptionPane.showMessageDialog(null, mensaje);
+                return;
+            }
+
+            // 2) conectar si no está conectado
+            boolean ok = GameState.getInstance().connectOnly("localhost", 5000, true);
+            if (!ok) {
+                JOptionPane.showMessageDialog(null, "No se pudo conectar al servidor.");
+                return;
+            }
+
+            // 3) mandar comando al server (¡ojo espacios!)
+            GameState.getInstance().getTransport().sendCommand("REGISTER " + u + " " + e + " " + p1);
+            System.out.println("[Loader] Enviando REGISTER al servidor...");
         });
         
         ver = new Point[4];
@@ -565,5 +586,98 @@ public class Loader extends Sala {
     public void eliminarSala() {
         instance = null;
     }
+    private void onAuthLine(String line) {
+        System.out.println("[Loader] AuthLine: " + line);
+            
+        // LOGIN_OK <token> <username> <userCode>
+        if (line.startsWith("LOGIN_OK")) {
+            String[] p = line.split("\\s+");
+            if (p.length >= 4) {
+                String token = p[1];
+                String username = p[2];
+                String userCode = p[3];
+                
+                var storage = GameState.getInstance().getTokenStorage();
+                if (storage != null) storage.guardar(token);
+
+                GameState.getInstance().setPlayerId(username);
+                GameState.getInstance().setUserCode(userCode);
+
+                AudioManager.getInstance().playMusic(MusicTrack.MAIN_MENU,true);
+                GameState.getInstance().siguienteSala();
+
+                GameState.getInstance().setAuthToken(token);
+                storage.guardar(token);
+            }
+            return;
+        }
+
+        // AUTH_OK <username> <userCode>
+        if (line.startsWith("AUTH_OK")) {
+            String[] p = line.split("\\s+");
+            if (p.length >= 3) {
+                String username = p[1];
+                String userCode = p[2];
+                GameState.getInstance().setPlayerId(username);
+                GameState.getInstance().setUserCode(userCode);
+
+                AudioManager.getInstance().playMusic(MusicTrack.MAIN_MENU,true);
+                GameState.getInstance().siguienteSala();
+            }
+            return;
+        }
+
+        if (line.startsWith("AUTH_FAIL")) {
+            var storage = GameState.getInstance().getTokenStorage();
+            if (storage != null) storage.borrar();
+            System.out.println("[Loader] Token inválido, mostrando login manual.");
+            // aquí NO cambias sala, solo dejas que cargue la UI normal
+            return;
+        }
+
+        if (line.startsWith("LOGIN_FAIL")) {
+            javax.swing.JOptionPane.showMessageDialog(null, "Usuario o contraseña incorrectos.");
+        }
+        if (line.startsWith("REGISTER_OK")) {
+            // ejemplo: REGISTER_OK <token> <username> <userCode>
+            String[] p = line.split("\\s+");
+            if (p.length >= 4) {
+                String token = p[1];
+                String username = p[2];
+                String userCode = p[3];
+
+                var storage = GameState.getInstance().getTokenStorage();
+                if (storage != null) storage.guardar(token);
+
+                GameState.getInstance().setPlayerId(username);
+                GameState.getInstance().setUserCode(userCode);
+
+                AudioManager.getInstance().playMusic(MusicTrack.MAIN_MENU, true);
+                GameState.getInstance().siguienteSala();
+                GameState.getInstance().setAuthToken(token);
+                storage.guardar(token);
+            }
+            return;
+        }
+        
+        if (line.startsWith("REGISTER_FAIL")) {
+            // ejemplo: REGISTER_FAIL <razon...>
+            String msg = line.length() > "REGISTER_FAIL".length()
+                ? line.substring("REGISTER_FAIL".length()).trim()
+                : "No se pudo registrar.";
+            JOptionPane.showMessageDialog(null, msg);
+            return;
+        }
+    }
+    public static void resetForReentry() {
+        authSubscribed = false;
+        list = null;
+        listaInicio = null;
+        listaRegistro = null;
+        if (instance != null) {
+            instance.panel = PanelActual.NINGUNO;
+        }
+    }
+
 
 }

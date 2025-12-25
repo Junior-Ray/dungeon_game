@@ -45,7 +45,37 @@ public class UsuarioDAO {
             st.execute(sqlAmigos);
         }
     }
-    
+    public Usuario crearUsuario(String username, String email, String password, String avatarPath) throws SQLException {
+        String codigo = java.util.UUID.randomUUID().toString();
+
+        if (avatarPath == null || avatarPath.isBlank()) {
+            avatarPath = "default_avatar.png";
+        }
+
+        String sql = """
+            INSERT INTO usuarios_chat (codigo, username, email, contrasena, avatar_path)
+            VALUES (?, ?, ?, ?, ?)
+        """;
+
+        try (Connection conn = Database.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setString(1, codigo);
+            ps.setString(2, username);
+            ps.setString(3, email);
+            ps.setString(4, password);
+            ps.setString(5, avatarPath);
+
+            ps.executeUpdate();
+        }
+
+        // Ajusta el constructor según tu clase Usuario real
+        Usuario u = new Usuario(codigo, username, password, avatarPath);
+        u.setEmail(email); // si tienes setter; si no, crea constructor con email
+
+        return u;
+    }
+
     public void insertarUsuario(Usuario u) throws SQLException {
         String sql = "INSERT INTO usuarios_chat (codigo, username, contrasena, avatar_path) VALUES (?, ?, ?, ?)";
         try (Connection conn = Database.getConnection();
@@ -174,5 +204,15 @@ public class UsuarioDAO {
             }
         }
     }
+    public String obtenerCodigoPorUsername(String username) throws SQLException {
+    String sql = "SELECT codigo FROM usuarios_chat WHERE username = ? LIMIT 1";
+    try (Connection c = Database.getConnection();
+         PreparedStatement ps = c.prepareStatement(sql)) {
+        ps.setString(1, username);
+        try (ResultSet rs = ps.executeQuery()) {
+            return rs.next() ? rs.getString("codigo") : null;
+        }
+    }
+}
 
 }

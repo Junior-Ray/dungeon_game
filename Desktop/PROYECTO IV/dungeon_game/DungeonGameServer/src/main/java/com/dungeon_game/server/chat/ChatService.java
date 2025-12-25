@@ -26,7 +26,7 @@ public class ChatService {
                         SolicitudAmistadDAO solcitudAmistadDAO){
         this.usuarioDAO  = usuarioDAO;
         this.amigoDAO = amigoDAO;
-        this.solicitudAmistadDAO = solicitudAmistadDAO;
+
     }
 
     public Usuario login(String username, String passwordPlano) throws SQLException {
@@ -62,7 +62,9 @@ public class ChatService {
         return true;
     }
     public List<SolicitudAmistad> obtenerSolicitudesPendientesDe(String receptorCodigo) throws SQLException {
-        return solicitudAmistadDAO.obtenerSolicitudesPendientesDe(Integer.parseInt(receptorCodigo));
+        return solicitudAmistadDAO.obtenerPendientesRecibidas(receptorCodigo); 
+                
+             
     }
 
     public void aceptarSolicitud(int idSolicitud) throws SQLException {
