@@ -18,7 +18,7 @@ public class DungeonGameServer {
     public static void main(String[] args) {
         int port = 5000;
 
-        // Creamos el contexto compartido
+        // Creamos el contexto compartido para
         ServerContext context = new ServerContext();
 
         // 1️⃣ Motor (desde el contexto)

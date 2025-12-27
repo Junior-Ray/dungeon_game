@@ -48,6 +48,10 @@ public abstract class VisualRender extends Interactuable implements VisualRender
         super(vertices, dir);
         objeto = renderable;
     }
+    public void moveTo(int x, int y) {
+        setRenderPosition(x, y);
+        setDireccion(new Point(x / 10, y / 10));
+    }
 
     @Override
     public Point[] getVertices() {

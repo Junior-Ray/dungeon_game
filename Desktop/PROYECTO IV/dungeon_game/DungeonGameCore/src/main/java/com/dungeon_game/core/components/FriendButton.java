@@ -7,6 +7,7 @@ package com.dungeon_game.core.components;
 import com.dungeon_game.core.api.DriverRender;
 import com.dungeon_game.core.api.RenderProcessor;
 import com.dungeon_game.core.data.SpatialGrid;
+import com.dungeon_game.core.logic.GameState;
 import com.dungeon_game.core.logic.InterpreterEvent;
 import com.dungeon_game.core.model.Imagen;
 import java.awt.AlphaComposite;
@@ -23,9 +24,12 @@ import java.util.List;
  * @author USUARIO
  */
 public class FriendButton extends UIButton {
-
-    private final String friendName;
+    
+    private final String friendLabel;
+    private final String friendUsername;
     private final Imagen menuCanvas;
+    private String friendCode;
+    private boolean online;
     
     
     private static FriendButton activeOwner = null;
@@ -55,11 +59,13 @@ public class FriendButton extends UIButton {
             int layer,            // capa del botón del amigo (ej. 7)
             Point[] vertices,
             Point dir,
-            String friendName
+            String friendLabel
     ) {
-        super(x, y, width, height, layer, null, vertices, dir, friendName);
+        super(x, y, width, height, layer, null, vertices, dir, friendLabel);
         
-        this.friendName = friendName;
+        this.friendLabel = friendLabel;
+        this.friendUsername = extractUsername(friendLabel);
+        
         menuCanvas = new Imagen(0, 0, 1280, 720, MENU_BG_LAYER, null, null, 210);
 
         // ==== forma base de botones del menú ====
@@ -82,7 +88,14 @@ public class FriendButton extends UIButton {
 
         btnInvitar.setOnClickAction(() -> {
             if (!menuOpen) return;
-            System.out.println("INVITAR a: " + friendName);
+            
+            if (!GameState.getInstance().hasTransport()) {
+                System.out.println("[FriendButton] No hay conexión (transport null).");
+                closeMenu();
+                return;
+            }
+            GameState.getInstance().getTransport().sendCommand("INVITE " + friendUsername);
+            System.out.println("[FriendButton] INVITE enviado a: " + friendUsername);
             // TODO: lógica real (enviar invitación)
             closeMenu();
         });
@@ -100,7 +113,7 @@ public class FriendButton extends UIButton {
 
         btnSusurrar.setOnClickAction(() -> {
             if (!menuOpen) return;
-            System.out.println("SUSURRAR a: " + friendName);
+            System.out.println("SUSURRAR a: " + friendUsername); //Pendiente todavia
             // TODO: abrir ventanita de chat
             closeMenu();
         });
@@ -108,11 +121,24 @@ public class FriendButton extends UIButton {
         menuOptions.add(btnInvitar);
         menuOptions.add(btnSusurrar);
     }
-    public String getFriendName() {
-        return friendName;
+    public String getFriendUsername() {
+        return friendUsername;
     }
     public void setSize(Point[] p){
         Point[] vertices = p;
+    }
+    private String extractUsername(String label) {
+        if (label == null) return "";
+        String s = label.trim();
+
+        // corta todo lo que venga después de " (" o de " - " si algún día lo usas
+        int idx = s.indexOf(" (");
+        if (idx > 0) s = s.substring(0, idx).trim();
+
+        idx = s.indexOf(" - ");
+        if (idx > 0) s = s.substring(0, idx).trim();
+
+        return s;
     }
     public void setSizeNull(){
         Point[] p = new Point[4];
@@ -133,7 +159,7 @@ public class FriendButton extends UIButton {
             if (activeOwner != null && activeOwner != this) {
                 activeOwner.closeMenu();
             }
-            System.out.println("CLICK en amigo: " + friendName);
+            System.out.println("CLICK en amigo: " + friendLabel + " | username=" + friendUsername);
             openMenu();
 
         }
@@ -146,12 +172,9 @@ public class FriendButton extends UIButton {
         if (!menuOpen) return;
         menuOpen = false;
         
-         if (activeWithMenu == this) {
-            activeWithMenu = null;
-        }
-        if (activeOwner == this) {
-            activeOwner = null;
-        }
+         if (activeWithMenu == this) activeWithMenu = null;
+        if (activeOwner == this) activeOwner = null;
+        
 
         // volvemos a permitir click desde la capa 1
         InterpreterEvent.getInstance().setMinActiveLayer(1);
@@ -174,13 +197,12 @@ public class FriendButton extends UIButton {
 
     private void openMenu() {
         if (menuOpen) return;
-        menuOpen = true;
-        activeOwner = this;
+
         
         if (activeWithMenu != null && activeWithMenu != this) {
             activeWithMenu.closeMenu();
         }
-
+        activeOwner = this;
         activeWithMenu = this;
         menuOpen = true;
 
@@ -245,8 +267,6 @@ public class FriendButton extends UIButton {
         // nada más por ahora: LobbyFriendsOverlay se encarga de sacarlo del RenderProcessor
     }
     public static void closeAnyOpenMenu() {
-        if (activeWithMenu != null) {
-            activeWithMenu.closeMenu();
-        }
+        if (activeWithMenu != null) activeWithMenu.closeMenu();
     }
 }

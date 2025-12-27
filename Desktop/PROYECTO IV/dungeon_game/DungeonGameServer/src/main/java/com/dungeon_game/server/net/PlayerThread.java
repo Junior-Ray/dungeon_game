@@ -5,11 +5,14 @@
 package com.dungeon_game.server.net;
 
 
+import com.dungeon_game.core.model.Usuario_y_Chat.EstadoSolicitud;
 import com.dungeon_game.core.model.Usuario_y_Chat.Usuario;
 import com.dungeon_game.server.ServerContext;
 import com.dungeon_game.server.session.PlayerMode;
 import com.dungeon_game.server.session.PlayerSession;
+import dao.AmigoDAO;
 import dao.AuthDAO;
+import dao.SolicitudAmistadDAO;
 import dao.UsuarioDAO;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -92,6 +95,13 @@ public class PlayerThread implements Runnable {
                     case "LOGIN" -> handleLogin(parts.length > 1 ? parts[1] : null);
                     case "AUTH_TOKEN" -> handleAuthToken(parts.length > 1 ? parts[1] : null);
                     case "REGISTER" -> handleRegister(parts.length > 1 ? parts[1] : null);
+                    
+                    case "FRIEND_LIST" -> handleFriendList();
+                    case "FRIEND_REQUEST" -> handleFriendRequest(parts.length > 1 ? parts[1] : null);
+                    case "FRIEND_PENDING" -> handleFriendPending();
+                    case "FRIEND_ACCEPT" -> handleFriendAccept(parts.length > 1 ? parts[1] : null);
+                    case "FRIEND_DECLINE" -> handleFriendDecline(parts.length > 1 ? parts[1] : null);
+
                     case "LOGOUT" -> handleLogout(parts.length > 1 ? parts[1] : null);
                     case "QUIT"  -> {
                         sendLine("BYE");
@@ -1001,6 +1011,243 @@ public class PlayerThread implements Runnable {
         } finally {
             running = false;
             try { socket.close(); } catch (Exception ignored) {}
+        }
+    }
+    private void handleFriendList() {
+        if (session == null || session.getUserCode() == null) {
+            sendLine("FRIEND_FAIL No autenticado");
+            return;
+        }
+
+        String myCode = session.getUserCode();
+
+        try {
+            AmigoDAO amigoDAO = new AmigoDAO();
+            List<com.dungeon_game.core.model.Usuario_y_Chat.Usuario> amigos = amigoDAO.obtenerAmigosDe(myCode);
+
+            // Armamos respuesta con online/offline
+            // Necesitamos username para checar online, tú guardas conexiones por playerId (=username)
+            // amigos trae username y codigo
+            // JSON: [{ "username":"", "code":"", "online":true }]
+            StringBuilder sb = new StringBuilder();
+            sb.append("[");
+
+            for (int i = 0; i < amigos.size(); i++) {
+                var u = amigos.get(i);
+                boolean online = manager.isOnline(u.getUsername());
+
+                sb.append("{")
+                  .append("\"username\":\"").append(escape(u.getUsername())).append("\",")
+                  .append("\"code\":\"").append(escape(u.getCodigo())).append("\",")
+                  .append("\"online\":").append(online)
+                  .append("}");
+
+                if (i < amigos.size() - 1) sb.append(",");
+            }
+
+            sb.append("]");
+            sendLine("FRIEND_LIST " + sb.toString());
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            sendLine("FRIEND_FAIL Error interno");
+        }
+    }
+
+    private String escape(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+    private void handleFriendRequest(String args) {
+        if (session == null || session.getUserCode() == null) {
+            sendLine("FRIEND_FAIL No autenticado");
+            return;
+        }
+        if (args == null || args.isBlank()) {
+            sendLine("FRIEND_FAIL Uso: FRIEND_REQUEST <username>");
+            return;
+        }
+
+        String targetUsername = args.trim();
+        String myCode = session.getUserCode();
+
+        try {
+            UsuarioDAO usuarioDAO = new UsuarioDAO();
+            String targetCode = usuarioDAO.obtenerCodigoPorUsername(targetUsername);
+
+            if (targetCode == null) {
+                sendLine("FRIEND_FAIL Usuario no existe");
+                return;
+            }
+            if (targetCode.equals(myCode)) {
+                sendLine("FRIEND_FAIL No puedes agregarte a ti mismo");
+                return;
+            }
+
+            AmigoDAO amigoDAO = new AmigoDAO();
+            if (amigoDAO.existeAmistad(myCode, targetCode)) {
+                sendLine("FRIEND_FAIL Ya son amigos");
+                return;
+            }
+
+            SolicitudAmistadDAO solDAO = new SolicitudAmistadDAO();
+            if (solDAO.existePendienteEntre(myCode, targetCode)) {
+                sendLine("FRIEND_FAIL Ya hay una solicitud pendiente");
+                return;
+            }
+
+            var sol = solDAO.crearSolicitud(myCode, targetCode);
+            sendLine("FRIEND_REQUEST_SENT " + targetUsername);
+
+            // Push en tiempo real al receptor si está online:
+            // Necesitamos el username del emisor para mostrarlo.
+            String fromUsername = session.getPlayerId(); // en tu server playerId = username
+            if (fromUsername == null) fromUsername = "Unknown";
+
+            if (manager.isOnline(targetUsername)) {
+                manager.sendTo(targetUsername,
+                    "FRIEND_REQUEST_RECEIVED " + sol.getId() + " " + fromUsername
+                );
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            sendLine("FRIEND_FAIL Error interno");
+        }
+    }
+    private void handleFriendPending() {
+        if (session == null || session.getUserCode() == null) {
+            sendLine("FRIEND_FAIL No autenticado");
+            return;
+        }
+
+        String myCode = session.getUserCode();
+
+        try {
+            SolicitudAmistadDAO solDAO = new SolicitudAmistadDAO();
+            UsuarioDAO usuarioDAO = new UsuarioDAO();
+
+            var pendientes = solDAO.obtenerPendientesRecibidas(myCode);
+
+            // JSON: [{ "id":1, "fromCode":"...", "fromUsername":"..." }]
+            StringBuilder sb = new StringBuilder();
+            sb.append("[");
+
+            for (int i = 0; i < pendientes.size(); i++) {
+                var s = pendientes.get(i);
+
+                var fromUser = usuarioDAO.buscarPorCodigo(s.getEmisorCodigo());
+                String fromUsername = (fromUser != null) ? fromUser.getUsername() : "Unknown";
+
+                sb.append("{")
+                  .append("\"id\":").append(s.getId()).append(",")
+                  .append("\"fromCode\":\"").append(escape(s.getEmisorCodigo())).append("\",")
+                  .append("\"fromUsername\":\"").append(escape(fromUsername)).append("\"")
+                  .append("}");
+
+                if (i < pendientes.size() - 1) sb.append(",");
+            }
+
+            sb.append("]");
+            sendLine("FRIEND_PENDING " + sb);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            sendLine("FRIEND_FAIL Error interno");
+        }
+    }
+    private void handleFriendAccept(String args) {
+        if (session == null || session.getUserCode() == null) {
+            sendLine("FRIEND_FAIL No autenticado");
+            return;
+        }
+        if (args == null || args.isBlank()) {
+            sendLine("FRIEND_FAIL Uso: FRIEND_ACCEPT <solicitudId>");
+            return;
+        }
+
+        int id;
+        try { id = Integer.parseInt(args.trim()); }
+        catch (Exception e) { sendLine("FRIEND_FAIL solicitudId inválido"); return; }
+
+        String myCode = session.getUserCode();
+
+        try {
+            SolicitudAmistadDAO solDAO = new SolicitudAmistadDAO();
+            var sol = solDAO.obtenerPorId(id);
+
+            if (sol == null || sol.getEstado() != com.dungeon_game.core.model.Usuario_y_Chat.EstadoSolicitud.PENDIENTE) {
+                sendLine("FRIEND_FAIL Solicitud no válida");
+                return;
+            }
+
+            // Validar que yo soy el receptor
+            if (!myCode.equals(sol.getReceptorCodigo())) {
+                sendLine("FRIEND_FAIL No es tu solicitud");
+                return;
+            }
+
+            // Aceptar + crear amistad
+            solDAO.aceptarSolicitud(id);
+
+            AmigoDAO amigoDAO = new AmigoDAO();
+            amigoDAO.agregarAmistad(sol.getEmisorCodigo(), sol.getReceptorCodigo());
+
+            // Responder al que aceptó: quién es el amigo
+            UsuarioDAO usuarioDAO = new UsuarioDAO();
+            var friendUser = usuarioDAO.buscarPorCodigo(sol.getEmisorCodigo());
+            String friendUsername = (friendUser != null) ? friendUser.getUsername() : "Unknown";
+
+            sendLine("FRIEND_ACCEPTED " + friendUsername + " " + sol.getEmisorCodigo());
+
+            // Push al emisor si está online
+            if (friendUser != null && manager.isOnline(friendUser.getUsername())) {
+                manager.sendTo(friendUser.getUsername(),
+                    "FRIEND_ACCEPTED " + session.getPlayerId() + " " + myCode
+                );
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            sendLine("FRIEND_FAIL Error interno");
+        }
+    }
+    private void handleFriendDecline(String args) {
+        if (session == null || session.getUserCode() == null) {
+            sendLine("FRIEND_FAIL No autenticado");
+            return;
+        }
+        if (args == null || args.isBlank()) {
+            sendLine("FRIEND_FAIL Uso: FRIEND_DECLINE <solicitudId>");
+            return;
+        }
+
+        int id;
+        try { id = Integer.parseInt(args.trim()); }
+        catch (Exception e) { sendLine("FRIEND_FAIL solicitudId inválido"); return; }
+
+        String myCode = session.getUserCode();
+
+        try {
+            SolicitudAmistadDAO solDAO = new SolicitudAmistadDAO();
+            var sol = solDAO.obtenerPorId(id);
+
+            if (sol == null || sol.getEstado() != EstadoSolicitud.PENDIENTE) {
+                sendLine("FRIEND_FAIL Solicitud no válida");
+                return;
+            }
+
+            if (!myCode.equals(sol.getReceptorCodigo())) {
+                sendLine("FRIEND_FAIL No es tu solicitud");
+                return;
+            }
+
+            solDAO.rechazarSolicitud(id);
+            sendLine("FRIEND_DECLINED " + id);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            sendLine("FRIEND_FAIL Error interno");
         }
     }
 

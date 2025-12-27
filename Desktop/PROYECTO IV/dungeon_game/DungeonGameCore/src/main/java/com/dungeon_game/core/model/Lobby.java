@@ -10,9 +10,10 @@ import com.dungeon_game.core.api.RenderProcessor;
 import com.dungeon_game.core.api.Updater;
 import com.dungeon_game.core.audio.AudioManager;
 import com.dungeon_game.core.components.ChatOverlay;
+import com.dungeon_game.core.components.FriendInfo;
 import com.dungeon_game.core.components.InviteOverlay;
 import com.dungeon_game.core.components.InviteOverlay2;
-import com.dungeon_game.core.components.LobbyFriendsOverlay;
+import com.dungeon_game.core.components.LobbyFriendsOverlay2;
 import com.dungeon_game.core.components.LobbyPartyControls;
 import com.dungeon_game.core.components.LobbyPartyView;
 import com.dungeon_game.core.components.SpriteImageAnimator;
@@ -23,6 +24,9 @@ import com.dungeon_game.core.data.SpatialGrid;
 import com.dungeon_game.core.logic.ClientMessageBus;
 import com.dungeon_game.core.logic.GameState;
 import com.dungeon_game.core.logic.InterpreterEvent;
+import com.google.gson.Gson;
+import java.lang.reflect.Type;
+import com.google.gson.reflect.TypeToken;
 
 import java.awt.AlphaComposite;
 import java.awt.Color;
@@ -37,11 +41,11 @@ import java.util.List;
  * @author GABRIEL SALGADO
  */
 public class Lobby extends Sala {
-    
+    private final Gson gson = new Gson(); //Json
     private final InviteOverlay inviteOverlay = new InviteOverlay();
     private final InviteOverlay2 inv = new InviteOverlay2();
     
-    private LobbyFriendsOverlay friendsOverlay;
+    private LobbyFriendsOverlay2 friendsOverlay;
     private static Lobby instance;
     private ChatOverlay chatOverlay;
     private boolean chatControlsShown = false;
@@ -64,6 +68,18 @@ public class Lobby extends Sala {
     @Override
     public void cargarIniciales() {
         ClientMessageBus.getInstance().start();
+        ClientMessageBus.getInstance().subscribe(
+            line -> line != null && (
+                line.startsWith("FRIEND_LIST") ||
+                line.startsWith("FRIEND_PENDING") ||
+                line.startsWith("FRIEND_REQUEST_RECEIVED") ||
+                line.startsWith("FRIEND_REQUEST_SENT") ||
+                line.startsWith("FRIEND_ACCEPTED") ||
+                line.startsWith("FRIEND_DECLINED") ||
+                line.startsWith("FRIEND_FAIL")
+            ),
+            this::onFriendLine
+        );
         list = new ArrayList<>(); //No se si realmente deba ir aca :)
         
         //ELEMENTOS ESTATICOS 
@@ -235,13 +251,15 @@ public class Lobby extends Sala {
         vFriends[3] = new Point(10, 0);
 
         // ==== Overlay de amigos ====
-        friendsOverlay = new LobbyFriendsOverlay();
+        friendsOverlay = new LobbyFriendsOverlay2();
 
 
 
         friends.setOnClickAction(() -> {
             System.out.println("CLICK FRIENDS");
             friendsOverlay.open();
+            GameState.getInstance().getTransport().sendCommand("FRIEND_LIST");
+            GameState.getInstance().getTransport().sendCommand("FRIEND_PENDING");
         });
         
         
@@ -662,7 +680,23 @@ public class Lobby extends Sala {
     g2d.dispose();
     return img;
 }
-    
+    private void onFriendLine(String line) {
+
+        if (line.startsWith("FRIEND_LIST ")) {
+            String json = line.substring("FRIEND_LIST ".length()).trim();
+
+            Type type = new TypeToken<List<FriendInfo>>(){}.getType();
+            List<FriendInfo> list = gson.fromJson(json, type);
+
+            friendsOverlay .setFriends(list);
+            return;
+        }
+
+        if (line.startsWith("FRIEND_FAIL")) {
+            javax.swing.JOptionPane.showMessageDialog(null, line);
+        }
+    }
+
 
     
     

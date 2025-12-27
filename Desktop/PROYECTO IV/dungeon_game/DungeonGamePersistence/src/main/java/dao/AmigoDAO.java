@@ -28,8 +28,10 @@ public class AmigoDAO {
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setString(1, cod1); ps.setString(2, cod2); ps.executeUpdate();
                 ps.setString(1, cod2); ps.setString(2, cod1); ps.executeUpdate();
+            } catch(SQLException e){
+                conn.rollback();
+                throw e;
             }
-            conn.commit();
         }
     }
     public List<String[]> listarAmistades() throws SQLException {

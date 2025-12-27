@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author USUARIO
  */
 public class ConnectionManager {
-
+    //Lo mas importante GAAAAAAAA
     private int port;
     private ServerContext context;
     
@@ -28,6 +28,9 @@ public class ConnectionManager {
     
     
     private final GameChatService chatService;
+    
+    
+    private ServerSocket serverSocket;
     
     public ConnectionManager(int port, ServerContext context){
         this.port = port;
@@ -52,12 +55,17 @@ public class ConnectionManager {
             }
 
         } catch (IOException e) {
-            System.err.println("[Server] Error en ConnectionManager: " + e.getMessage());
-            e.printStackTrace();
+            if (running) { // si estaba corriendo de verdad, es error real
+                System.err.println("[Server] Error en ConnectionManager: " + e.getMessage());
+                e.printStackTrace();
+            }
+        } finally {
+            try { if (serverSocket != null) serverSocket.close(); } catch (Exception ignored) {}
         }
     }
     public void stop() {
         running = false;
+        try { if (serverSocket != null) serverSocket.close(); } catch (Exception ignored) {}
         // No cierro players aquí por simplicidad, se podría mejorar
     }
 
@@ -96,5 +104,12 @@ public class ConnectionManager {
         } else {
             System.out.println("[Server][WARN] sendTo failed, no thread for " + playerId);
         }
+    }
+    public boolean isOnline(String playerId) {
+        return playerId != null && playersById.containsKey(playerId);
+    }
+
+    public List<String> getOnlinePlayerIds() {
+        return new ArrayList<>(playersById.keySet());
     }
 }

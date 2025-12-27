@@ -6,21 +6,28 @@ package com.dungeon_game.core.components;
 
 import com.dungeon_game.core.api.DriverRender;
 import com.dungeon_game.core.api.RenderProcessor;
+import com.dungeon_game.core.api.Updater;
+import com.dungeon_game.core.data.SlideVertical;
 import com.dungeon_game.core.data.SpatialGrid;
+import com.dungeon_game.core.data.VisualRender;
+import com.dungeon_game.core.logic.ClientMessageBus;
+import com.dungeon_game.core.logic.GameState;
 import com.dungeon_game.core.logic.InterpreterEvent;
+import com.dungeon_game.core.model.Imagen;
 import java.awt.AlphaComposite;
 import java.awt.Color;
 import java.awt.Graphics2D;
-import com.dungeon_game.core.model.Imagen;
 import java.awt.Point;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-
-
-public class LobbyFriendsOverlay {
+/**
+ *
+ * @author USUARIO
+ */
+public class LobbyFriendsOverlay2 implements Updater{
         
     private final List<FriendButton> friendButtonsConectados = new ArrayList<>();
     private final List<FriendButton> friendButtonsDesconectados = new ArrayList<>();
@@ -40,9 +47,9 @@ public class LobbyFriendsOverlay {
     private boolean showDesconectados = true;
 
     // Listas de amigos (para futuro dinámico)
-    private final List<String> conectados = Arrays.asList();
+    private final List<FriendInfo> conectados = Arrays.asList();
 
-    private final List<String> desconectados = Arrays.asList();
+    private final List<FriendInfo> desconectados = Arrays.asList();
 
     // Posiciones dinámicas reales calculadas en cada dibujado
     private int lastYHeaderConectados;
@@ -59,8 +66,22 @@ public class LobbyFriendsOverlay {
     // Zonas clickeables de encabezados
     private final UIButton btnHeaderConectados;
     private final UIButton btnHeaderDesconectados;
+    
+    private boolean addExpanded = false;
+    private SlideVertical addAnimBtn;
+    private SlideVertical addAnimInput;
 
-    public LobbyFriendsOverlay() {
+    private InputText addFriendInput;
+
+    private String toastText = null;
+    private long toastUntilMs = 0;
+    private boolean changed = false;
+    private boolean subscribed = false;
+
+
+    public LobbyFriendsOverlay2() {
+        
+        
         // Imagen base
         semiFondoAmigos = new Imagen(0, 0, 1280, 720, 6, null, null, 210);
         
@@ -145,6 +166,11 @@ public class LobbyFriendsOverlay {
         });
 
         btnAgregarAmigo.setOnClickAction(() -> {
+            if (!addExpanded) {
+                expandAddFriend();
+            } else {
+                submitAddFriend();
+            }
             System.out.println("AGREGAR AMIGO (TODO abrir popup)");
         });
 
@@ -153,12 +179,50 @@ public class LobbyFriendsOverlay {
         });
 
         btnCerrarAmigos.setOnClickAction(this::close);
+        
+        int inputW = 240;
+        int inputH = 26;
+        int inputX = 870;     // alineado con el botón
+        int inputY = 540 + 42; // debajo del botón base (cuando está cerrado)
+
+        Point[] vInput = new Point[4];
+        vInput[0] = new Point(0, 0);
+        vInput[1] = new Point(24, 0);
+        vInput[2] = new Point(24, 3);
+        vInput[3] = new Point(0, 3);
+
+        Imagen inputImg = new Imagen(inputX, inputY, inputW, inputH, 9, null, null, 255);
+        addFriendInput = new InputText(vInput, new Point(inputX / 10, inputY / 10), inputImg);
+        addFriendInput.setAllowEnter(false);
+        addFriendInput.setEnabled(false);
+        addFriendInput.render();
+        
     }
 
     // ================== PÚBLICOS ==================
 
     /** Abre el panel de amigos */
     public void open() {
+        if (!subscribed) {
+            subscribed = true;
+            ClientMessageBus.getInstance().subscribe(
+                line -> line.startsWith("FRIEND_REQUEST_SENT") || line.startsWith("FRIEND_FAIL"),
+                line -> {
+                    if (line.startsWith("FRIEND_FAIL")) {
+                        showToast(line.replace("FRIEND_FAIL", "").trim());
+                        return;
+                    }
+                    if (line.startsWith("FRIEND_REQUEST_SENT")) {
+                        showToast("Solicitud enviada");
+                        addFriendInput.clear();
+                        addFriendInput.render();
+                        collapseAddFriend(); // solo en éxito ✅
+                    }
+                }
+            );
+        }
+
+        GameState.getInstance().registerUpdater(this); 
         InterpreterEvent.getInstance().setMinActiveLayer(7);
         semiFondoAmigos.setImage(buildFriendsImage());
 
@@ -168,6 +232,8 @@ public class LobbyFriendsOverlay {
         RenderProcessor.getInstance().setElement(btnCerrarAmigos);
         RenderProcessor.getInstance().setElement(btnHeaderConectados);
         RenderProcessor.getInstance().setElement(btnHeaderDesconectados);
+        RenderProcessor.getInstance().setElement(addFriendInput);
+        addFriendInput.setEnabled(false);
 
         //InterpreterEvent.getInstance().setCapa(9);
         redraw();
@@ -175,6 +241,7 @@ public class LobbyFriendsOverlay {
 
     /** Cierra el panel de amigos y limpia nodos */
     public void close() {
+        GameState.getInstance().unregisterUpdater(this);
         InterpreterEvent.getInstance().setMinActiveLayer(1);
         
 
@@ -188,13 +255,16 @@ public class LobbyFriendsOverlay {
         DriverRender.getInstance().eliminarNodo(btnCerrarAmigos);
         DriverRender.getInstance().eliminarNodo(btnHeaderConectados);
         DriverRender.getInstance().eliminarNodo(btnHeaderDesconectados);
-        
+        DriverRender.getInstance().eliminarNodo(addFriendInput);
+        addFriendInput.setEnabled(false);
+        addFriendInput.offFocus();
 
         SpatialGrid.getInstance().limpiar(btnAgregarAmigo);
         SpatialGrid.getInstance().limpiar(btnBuscarAmigo);
         SpatialGrid.getInstance().limpiar(btnCerrarAmigos);
         SpatialGrid.getInstance().limpiar(btnHeaderConectados);
         SpatialGrid.getInstance().limpiar(btnHeaderDesconectados);
+        SpatialGrid.getInstance().limpiar(addFriendInput);
 
         DriverRender.getInstance().string();
     }
@@ -245,6 +315,13 @@ public class LobbyFriendsOverlay {
         // Título
         g2d.setColor(Color.WHITE);
         g2d.drawString("AMIGOS", PX + 20, PY + 25);
+        
+        if (toastText != null) {
+            g2d.setColor(new Color(0, 0, 0, 160));
+            g2d.fillRoundRect(PX + 20, PY + 30, 360, 24, 12, 12);
+            g2d.setColor(Color.WHITE);
+            g2d.drawString(toastText, PX + 30, PY + 47);
+        }
 
         // ===== LAYOUT DINÁMICO =====
         int y = PY + 55;
@@ -271,12 +348,12 @@ public class LobbyFriendsOverlay {
             g2d.setColor(Color.WHITE);
             int lineHeight = 20;
 
-            for (String c : conectados) {
+            for (FriendInfo c : conectados) {
                 FriendContextMenu friendMenu = new FriendContextMenu();
                 if (yContenidoConectados + lineHeight > yLimiteConectados) break;
 
                 // Pintas el texto como antes
-                g2d.drawString("• " + c, PX + 30, yContenidoConectados);
+                g2d.drawString("• " + c.getUsername(), PX + 30, yContenidoConectados);
 
                 // Y creas un botón invisible (o con imagen muy simple)
                 FriendButton btnFriend = new FriendButton(
@@ -287,7 +364,7 @@ public class LobbyFriendsOverlay {
                         7,                         // capa del amigo (por encima de lobby base, por debajo del menú=8)
                         vBtn,
                         new Point((PX + 20) / 10, (yContenidoConectados - 16) / 10),
-                        c  // texto interno no te importa si sigues dibujando con g2d
+                        c.getUsername()  // texto interno no te importa si sigues dibujando con g2d
                 );
                 
 
@@ -317,19 +394,23 @@ public class LobbyFriendsOverlay {
         if (showDesconectados) {
             g2d.setColor(new Color(200, 200, 200));
             int lineHeight = 20;
-            for (String d : desconectados) {
-                g2d.drawString("• " + d, PX + 30, yContenidoDesconect);
+            for (FriendInfo d : desconectados) {
+                g2d.drawString("• " + d.getUsername(), PX + 30, yContenidoDesconect);
                 yContenidoDesconect += lineHeight;
             }
         }
 
         // ===== BOTONES INFERIORES (no dependen del layout dinámico) =====
+        
+        int addX = btnAgregarAmigo.getRenderX();
+        int addY = btnAgregarAmigo.getRenderY();
+    
         g2d.setColor(new Color(230, 210, 90));
-        g2d.fillRoundRect(870, 540, 160, 36, 12, 12);
+        g2d.fillRoundRect(addX, addY, 160, 36, 12, 12);
         g2d.setColor(Color.DARK_GRAY);
-        g2d.drawRoundRect(870, 540, 160, 36, 12, 12);
+        g2d.drawRoundRect(addX, addY, 160, 36, 12, 12);
         g2d.setColor(Color.BLACK);
-        g2d.drawString("Agregar amigo", 885, 562);
+        g2d.drawString("Agregar amigo", addX + 15, addY + 22);
         g2d.drawOval(1010, 546, 10, 10);
         g2d.drawLine(1018, 554, 1024, 560);
 
@@ -347,7 +428,22 @@ public class LobbyFriendsOverlay {
         g2d.fillOval(1150, 130, 24, 24);
         g2d.setColor(Color.BLACK);
         g2d.drawString("X", 1158, 146);
-        
+        if (addExpanded) {
+            int ix = addFriendInput.getRenderX();
+            int iy = addFriendInput.getRenderY();
+            int iw = addFriendInput.getWidth();
+            int ih = addFriendInput.getHeight();
+
+            g2d.setColor(new Color(25, 25, 50, 255));
+            g2d.fillRoundRect(ix, iy, iw, ih, 12, 12);
+            g2d.setColor(new Color(90, 90, 140));
+            g2d.drawRoundRect(ix, iy, iw, ih, 12, 12);
+
+            if (addFriendInput.getText().isEmpty()) {
+                g2d.setColor(new Color(180, 180, 220));
+                g2d.drawString("username...", ix + 8, iy + 18);
+            }
+        }
 
 
         g2d.dispose();
@@ -371,5 +467,124 @@ public class LobbyFriendsOverlay {
         }
         friendButtonsDesconectados.clear();
     }
+    private void expandAddFriend() {
+        if (addExpanded) return;
+        addExpanded = true;
+
+        int btnEndY = 580; // donde quieres que baje
+        int inputEndY = btnEndY + 42;
+
+        addFriendInput.setEnabled(true);
+        addFriendInput.render();
+
+        addAnimBtn = new SlideVertical(btnAgregarAmigo, btnEndY, 8);
+        addAnimBtn.setListener(() -> addAnimBtn = null);
+
+        addAnimInput = new SlideVertical(addFriendInput, inputEndY, 8);
+        addAnimInput.setListener(() -> addAnimInput = null);
+
+        GameState.getInstance().registerUpdater(addAnimBtn);
+        GameState.getInstance().registerUpdater(addAnimInput);
+    }
+    private void collapseAddFriend() {
+        if (!addExpanded) return;
+        addExpanded = false;
+
+        addFriendInput.offFocus();
+        addFriendInput.setEnabled(false);
+
+        int btnStartY = 540;
+        int inputStartY = btnStartY + 42;
+        addAnimBtn = new SlideVertical(btnAgregarAmigo, btnStartY, 8);
+        addAnimBtn.setListener(() -> addAnimBtn = null);
+
+        addAnimInput = new SlideVertical(addFriendInput, inputStartY, 8);
+        addAnimInput.setListener(() -> addAnimInput = null);
+
+
+        GameState.getInstance().registerUpdater(addAnimBtn);
+        GameState.getInstance().registerUpdater(addAnimInput);
+    }
+    private void submitAddFriend() {
+        String target = addFriendInput.getText().trim();
+        if (target.isEmpty()) {
+            showToast("Escribe un username primero");
+
+            changed = true;
+            return;
+        }
+
+        if (!GameState.getInstance().hasTransport()) {
+            showToast("Sin conexión");
+     
+            changed = true;
+            return;
+        }
+
+        GameState.getInstance().getTransport().sendCommand("FRIEND_REQUEST " + target);
+        showToast("Enviando solicitud a " + target);
+        changed = true;
+    }
+    @Override
+    public void update() {
+        // Para cursor blink
+        if (addFriendInput != null && addFriendInput.isFocused()) {
+            addFriendInput.update();
+            changed = true;
+        }
+        
+        boolean animating = (addAnimBtn != null) || (addAnimInput != null);
+        
+        if (addExpanded || animating ) {
+            refreshGridFor(btnAgregarAmigo);
+            refreshGridFor(addFriendInput);
+            changed = true;
+        } else {
+            // opcional: también si está colapsado para asegurar que vuelva bien
+            refreshGridFor(btnAgregarAmigo);
+            refreshGridFor(addFriendInput);
+        }
+        long now = System.currentTimeMillis();
+        if (toastText != null && now > toastUntilMs) {
+            toastText = null;
+            changed =true;
+        }
+
+        if (changed) {
+            changed = false;
+            redraw();
+        }
+    }
+    private void showToast(String text) {
+        toastText = text;
+        toastUntilMs = System.currentTimeMillis() + 2000;
+        changed = true;
+    }
+    public void onFriendRequestSent() {
+        addFriendInput.clear();
+        addFriendInput.render();
+        collapseAddFriend();      
+        changed = true;
+    }
+    private void refreshGridFor(VisualRender vr) {
+        SpatialGrid grid = SpatialGrid.getInstance();
+        grid.limpiar(vr);
+        grid.setElement(vr);
+    }
+    public void setFriends(List<FriendInfo> list) {
+        for(FriendInfo f: list){
+            if(f.online){
+                conectados.add(f);
+            }
+            else{
+                desconectados.add(f);
+            }
+        }
+        
+        changed = true; // para que redraw ocurra en update()
+    }
+
+
+
 
 }
