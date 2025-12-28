@@ -4,21 +4,23 @@
  */
 package com.dungeon_game.core.logic;
 
-import com.dungeon_game.core.components.AbstractUIComponent;
+import com.dungeon_game.core.data.VisualRender;
+
+
 
 /**
  *
  * @author GABRIEL SALGADO
  */
 public class UIFocus {
-    private static AbstractUIComponent focused;
+    private static VisualRender focused;
 
-    public static void setFocus(AbstractUIComponent comp) {
+    public static void setFocus(VisualRender comp) {
         if(focused!= comp&&focused!=null) focused.offFocus();
         focused = comp;
     }
 
-    public static AbstractUIComponent getFocus() {
+    public static VisualRender getFocus() {
         return focused;
     }
 }

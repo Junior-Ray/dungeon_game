@@ -11,8 +11,8 @@ import java.awt.Point;
  * @author GABRIEL SALGADO
  */
 public abstract class Interactuable {
-    private Point[] vertices;
-    private Point dir ;
+    protected Point[] vertices;
+    protected Point dir ;
 
     public Interactuable(Point[] vertices, Point dir) {
         this.vertices = vertices;

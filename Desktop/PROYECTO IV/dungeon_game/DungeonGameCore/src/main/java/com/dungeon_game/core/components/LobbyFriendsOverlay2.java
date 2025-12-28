@@ -60,7 +60,6 @@ public class LobbyFriendsOverlay2 implements Updater{
 
     // Botones inferiores y X
     private final UIButton btnAgregarAmigo;
-    private final UIButton btnBuscarAmigo;
     private final UIButton btnCerrarAmigos;
 
     // Zonas clickeables de encabezados
@@ -107,15 +106,6 @@ public class LobbyFriendsOverlay2 implements Updater{
                 "Agregar amigo"
         );
 
-        btnBuscarAmigo = new UIButton(
-                870, 586,
-                160, 36,
-                9,
-                null,
-                vBtn,
-                new Point(87, 58),
-                "Buscar amigo"
-        );
 
         btnCerrarAmigos = new UIButton(
                 1150, 130,
@@ -174,9 +164,6 @@ public class LobbyFriendsOverlay2 implements Updater{
             System.out.println("AGREGAR AMIGO (TODO abrir popup)");
         });
 
-        btnBuscarAmigo.setOnClickAction(() -> {
-            System.out.println("BUSCAR AMIGO (TODO abrir buscador)");
-        });
 
         btnCerrarAmigos.setOnClickAction(this::close);
         
@@ -228,7 +215,6 @@ public class LobbyFriendsOverlay2 implements Updater{
 
         RenderProcessor.getInstance().setElement(semiFondoAmigos);
         RenderProcessor.getInstance().setElement(btnAgregarAmigo);
-        RenderProcessor.getInstance().setElement(btnBuscarAmigo);
         RenderProcessor.getInstance().setElement(btnCerrarAmigos);
         RenderProcessor.getInstance().setElement(btnHeaderConectados);
         RenderProcessor.getInstance().setElement(btnHeaderDesconectados);
@@ -250,8 +236,6 @@ public class LobbyFriendsOverlay2 implements Updater{
         DriverRender.getInstance().eliminarNodo(semiFondoAmigos);
         DriverRender.getInstance().eliminarNodo(btnAgregarAmigo);
         btnAgregarAmigo.setEnabled(false);
-        DriverRender.getInstance().eliminarNodo(btnBuscarAmigo);
-        btnBuscarAmigo.setEnabled(false);
         DriverRender.getInstance().eliminarNodo(btnCerrarAmigos);
         DriverRender.getInstance().eliminarNodo(btnHeaderConectados);
         DriverRender.getInstance().eliminarNodo(btnHeaderDesconectados);
@@ -260,7 +244,6 @@ public class LobbyFriendsOverlay2 implements Updater{
         addFriendInput.offFocus();
 
         SpatialGrid.getInstance().limpiar(btnAgregarAmigo);
-        SpatialGrid.getInstance().limpiar(btnBuscarAmigo);
         SpatialGrid.getInstance().limpiar(btnCerrarAmigos);
         SpatialGrid.getInstance().limpiar(btnHeaderConectados);
         SpatialGrid.getInstance().limpiar(btnHeaderDesconectados);
@@ -414,14 +397,7 @@ public class LobbyFriendsOverlay2 implements Updater{
         g2d.drawOval(1010, 546, 10, 10);
         g2d.drawLine(1018, 554, 1024, 560);
 
-        g2d.setColor(new Color(200, 160, 240));
-        g2d.fillRoundRect(870, 586, 160, 36, 12, 12);
-        g2d.setColor(Color.DARK_GRAY);
-        g2d.drawRoundRect(870, 586, 160, 36, 12, 12);
-        g2d.setColor(Color.BLACK);
-        g2d.drawString("Buscar amigo", 890, 608);
-        g2d.drawOval(1010, 592, 10, 10);
-        g2d.drawLine(1018, 600, 1024, 606);
+
 
         // Botón X
         g2d.setColor(new Color(220, 90, 90));

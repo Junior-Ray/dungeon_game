@@ -14,7 +14,7 @@ public class Database {
     private static final String URL  = "jdbc:mysql://localhost:3306/dungeon_game?useSSL=false&serverTimezone=UTC";
     
     // REVISA TUS CREDENCIALES:
-    private static final String USER = "root";  // Usuario por defecto en XAMPP/MySQL local
+    private static final String USER = "dungeon";  // Usuario por defecto en XAMPP/MySQL local
     private static final String PASS = "12345";  // <-- ¿Seguro que es 1234? Si usas XAMPP suele ser "" (vacío)
 
     public static Connection getConnection() throws SQLException {

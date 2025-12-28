@@ -112,7 +112,7 @@ public class Loader extends Sala {
             System.out.println("👀 [DEBUG] Token leído del archivo: " + token);
 
             if (token != null) {
-                boolean ok = GameState.getInstance().connectOnly("localhost", 5000, true);
+                boolean ok = GameState.getInstance().connectOnly("52.14.160.71", 5000, true);
                 if (ok) {
                     GameState.getInstance().getTransport().sendCommand("AUTH_TOKEN " + token);
                     System.out.println("🔄 [DEBUG] Enviando AUTH_TOKEN al servidor...");
@@ -402,7 +402,7 @@ public class Loader extends Sala {
 
             // 3. Llamada al Backend (AuthManager)
             // AuthManager.login devuelve un objeto Usuario si es correcto, o null si falló.
-            boolean ok = GameState.getInstance().connectOnly("localhost", 5000, true);
+            boolean ok = GameState.getInstance().connectOnly("52.14.160.71", 5000, true);
             if (!ok) {
                 JOptionPane.showMessageDialog(null, "No se pudo conectar al servidor.");
                 return;
@@ -511,7 +511,7 @@ public class Loader extends Sala {
             }
 
             // 2) conectar si no está conectado
-            boolean ok = GameState.getInstance().connectOnly("localhost", 5000, true);
+            boolean ok = GameState.getInstance().connectOnly("52.14.160.71", 5000, true);
             if (!ok) {
                 JOptionPane.showMessageDialog(null, "No se pudo conectar al servidor.");
                 return;

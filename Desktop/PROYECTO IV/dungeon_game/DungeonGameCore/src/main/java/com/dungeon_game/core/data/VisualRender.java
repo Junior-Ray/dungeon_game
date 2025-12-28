@@ -17,9 +17,9 @@ import java.awt.image.BufferedImage;
  */
 public abstract class VisualRender extends Interactuable implements VisualRenderable, Updater {
 
-    private RenderableVisual objeto;
+    protected RenderableVisual objeto;
     
-    private byte id = 0;   // 0 = sin asignar aún
+    protected byte id = 0;   // 0 = sin asignar aún
 
     public byte getId() {
         return id;
@@ -143,8 +143,11 @@ public abstract class VisualRender extends Interactuable implements VisualRender
     public void setObjeto(RenderableVisual objeto) {
         this.objeto = objeto;
     }
-
-    
+    public void offFocus(){
+        
+    }
+    public void addChar(char c){
+    };
     public void update(){
         
         objeto.update();

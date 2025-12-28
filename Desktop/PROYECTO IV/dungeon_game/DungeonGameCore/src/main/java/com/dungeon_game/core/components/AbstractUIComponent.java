@@ -5,6 +5,7 @@
 package com.dungeon_game.core.components;
 
 import com.dungeon_game.core.api.InputMouse;
+import com.dungeon_game.core.data.ClickOn;
 import com.dungeon_game.core.data.RenderableVisual;
 import com.dungeon_game.core.data.VisualRender;
 import java.awt.Point;
@@ -15,16 +16,9 @@ import java.awt.Point;
  * @author GABRIEL SALGADO
  */
 
-public abstract class AbstractUIComponent extends VisualRender {
+public abstract class AbstractUIComponent extends VisualRender implements ClickOn {
 
-   
-    @FunctionalInterface
-    public static interface ClickAction {
-        /**
-         * Define la lógica que se ejecutará al activarse el componente.
-         */
-        void execute();
-    }
+
 
     // --- ESTADO INTERNO DEL CLIENTE ---
     protected boolean enabled = true;

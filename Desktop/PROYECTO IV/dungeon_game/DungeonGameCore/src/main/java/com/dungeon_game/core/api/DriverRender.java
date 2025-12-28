@@ -7,6 +7,8 @@ package com.dungeon_game.core.api;
 import com.dungeon_game.core.data.Interactuable;
 import com.dungeon_game.core.data.NodoVR;
 import com.dungeon_game.core.data.VisualRender;
+import java.util.LinkedList;
+import java.util.Queue;
 
 /**
  *
@@ -16,7 +18,6 @@ public class DriverRender {
 
     private static NodoVR primero;
     private static DriverRender instance;
-    private static NodoVR transverse;
 
     private DriverRender() {
     }
@@ -32,14 +33,11 @@ public class DriverRender {
     public void setElement(VisualRenderable actual) {
         NodoVR nuevo = new NodoVR(actual);
 
-        // Caso 1: lista vacía
         if (primero == null) {
             primero = nuevo;
-            transverse = primero;
             return;
         }
 
-        // Caso 2: insertar al inicio
         if (primero.getInfo().getLayer() > nuevo.getInfo().getLayer()) {
             nuevo.setSgte(primero);
             primero.setAnt(nuevo);
@@ -47,7 +45,6 @@ public class DriverRender {
             return;
         }
 
-        // Recorrer la lista
         NodoVR p = primero;
 
         while (p.getSgte() != null
@@ -67,20 +64,36 @@ public class DriverRender {
     }
 
     public boolean eliminarNodo(VisualRenderable obj) {
+
+        if (primero == null) {
+            return false;
+        }
+
+        // Eliminar el primero
         if (primero.getInfo() == obj) {
             primero = primero.getSgte();
-            primero.setAnt(null);
+            if (primero != null) {
+                primero.setAnt(null);
+            }
             return true;
         }
-        NodoVR p = primero;
-        do {
-            p = p.getSgte();
+
+        NodoVR p = primero.getSgte();
+
+        while (p != null) {
             if (p.getInfo() == obj) {
+
                 p.getAnt().setSgte(p.getSgte());
-                if(p.getSgte()!=null)p.getSgte().setAnt(p.getAnt());
+
+                if (p.getSgte() != null) {
+                    p.getSgte().setAnt(p.getAnt());
+                }
+
                 return true;
             }
-        }while (p.getSgte() != null);
+            p = p.getSgte();
+        }
+
         return false;
     }
 
@@ -90,29 +103,22 @@ public class DriverRender {
         }
     }
 
-    public boolean hasNext() {
-        return transverse != null;
-    }
-
-    public VisualRenderable nextElement() {
-        if (transverse == null) {
-            return null;
+    public Queue<VisualRenderable> obtenerCola() {
+        NodoVR temp = primero;
+        Queue<VisualRenderable> cola = new LinkedList();
+        while (temp != null) {
+            cola.add(temp.getInfo());
+            temp = temp.getSgte();
         }
 
-        NodoVR actual = transverse;
-        transverse = transverse.getSgte();
-        return actual.getInfo();
-    }
-
-    public void resetTransverse() {
-        transverse = primero;
+        return cola;
     }
 
     public void string() {
         NodoVR t = primero;
         String resultado = "NUMERO: \n";
         while (t != null) {
-            resultado+="\n " + t.getInfo().getVisualId()+t.getInfo().getLayer();
+            resultado += "\n " + t.getInfo().getVisualId() + t.getInfo().getLayer();
             if (t.getInfo() instanceof VisualRender) {
                 Interactuable obj = (Interactuable) t.getInfo();
 
@@ -123,4 +129,6 @@ public class DriverRender {
         }
         System.out.println("ORDEN: ID" + resultado);
     }
+
 }
+

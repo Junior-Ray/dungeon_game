@@ -11,10 +11,17 @@ import com.dungeon_game.core.model.Sala;
  * @author GABRIEL SALGADO
  */
 public class ListaSala {
+
     private NodoSala cabeza;
     private NodoSala cola;
-    private int size = 0;
-    public void ListaSala (){};
+    private int size;
+
+    public ListaSala() {
+        cabeza = null;
+        cola = null;
+        size = 0;
+    }
+
     public void agregar(Sala data) {
         NodoSala nuevo = new NodoSala(data);
 
@@ -66,5 +73,27 @@ public class ListaSala {
     public int size() {
         return size;
     }
-}
 
+    public boolean isEmpty() {
+        return size == 0;
+    }
+
+    public void clear() {
+        cabeza = null;
+        cola = null;
+        size = 0;
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        NodoSala actual = cabeza;
+
+        while (actual != null) {
+            sb.append(actual.getInfo()).append(" -> ");
+            actual = actual.getSiguiente();
+        }
+
+        return sb.toString();
+    }
+}

@@ -39,7 +39,9 @@ public class AudioManager {
     // ===== MÚSICA =====
     
     public void playMusic(MusicTrack track) {
-        playMusic(track, true);
+        if (!musicEnabled || player == null) return;
+        currentTrack = track;
+        player.playMusic(track, true); // Delegamos el Enum directamente
     }
     
     public void playMusic(MusicTrack track, boolean loop) {
@@ -51,7 +53,7 @@ public class AudioManager {
         
         currentTrack = track;
         isPausedByFocusLoss = false; // Reset flag
-        player.playMusic(track.getFileName(), loop);
+        player.playMusic(track, loop);
     }
     
     public void playMusic(String trackName, boolean loop) {
@@ -203,9 +205,10 @@ public class AudioManager {
     
     // ===== SONIDOS =====
     
-    public void playSound(SoundEffect sound) {
-        if (!soundEnabled || player == null || sound == null) return;
-        player.playSound(sound.getFileName());
+    public void playSound(SoundEffect effect) {
+        if (!soundEnabled || player == null || effect == null) return;
+        // Delegamos directamente al player (él se encargará de los hilos)
+        player.playSound(effect);
     }
     
     public void setSoundVolume(float volume) {

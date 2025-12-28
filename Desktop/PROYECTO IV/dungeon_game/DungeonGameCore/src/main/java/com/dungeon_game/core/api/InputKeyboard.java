@@ -4,10 +4,10 @@
  */
 package com.dungeon_game.core.api;
 
-import com.dungeon_game.core.components.AbstractUIComponent;
-import com.dungeon_game.core.components.InputText;
+
 import com.dungeon_game.core.components.InputTextArea;
 import com.dungeon_game.core.components.TextInputComponent;
+import com.dungeon_game.core.data.VisualRender;
 import com.dungeon_game.core.logic.UIFocus;
 import java.awt.event.KeyEvent;
 import java.util.concurrent.ConcurrentHashMap;
@@ -87,13 +87,8 @@ public class InputKeyboard {
     * Procesa caracteres tipeados (llamado desde update)
     */
    public void onKeyTyped(char c) {
-       AbstractUIComponent f = UIFocus.getFocus();
-
-       if (f instanceof InputTextArea textArea) {
-           textArea.addChar(c);
-       } else if (f instanceof InputText input) {
-           input.addChar(c);
-       }
+       VisualRender f = UIFocus.getFocus();
+       if(f!=null)f.addChar(c);
    }
 
    // ----------------------
@@ -128,7 +123,7 @@ public class InputKeyboard {
 
         // 5. Procesar eventos
         if (consumeKeyPressedEvent()) {
-            AbstractUIComponent f = UIFocus.getFocus();
+            VisualRender f = UIFocus.getFocus();
             Integer keyCode = consumeKeyCode();
 
             if (f instanceof TextInputComponent input && keyCode != null) {

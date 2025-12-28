@@ -7,7 +7,7 @@ package com.dungeon_game.UI;
 import com.dungeon_game.client.ClientBootstrap;
 import com.dungeon_game.client.DefaultTransportFactory;
 import com.dungeon_game.client.audio.JavaAudioPlayer;
-import com.dungeon_game.client.net.ClientAuthService;
+import com.dungeon_game.client.net.NetworkAuthService;
 import com.dungeon_game.client.net.SessionStorage;
 import com.dungeon_game.core.api.RenderProcessor;
 import com.dungeon_game.core.audio.AudioManager;
@@ -32,7 +32,7 @@ public class GameWindow {
         audioManager.setAudioPlayer(new JavaAudioPlayer());
         // INYECCIÓN DE DEPENDENCIAS (Obligatorio)
         // Conectamos el cerebro (Client) con el cuerpo (Core)
-        AuthManager.setService(new ClientAuthService());
+        AuthManager.setService(new NetworkAuthService());
         GameState.getInstance().setTokenStorage(new SessionStorage());
         
         GameState.getInstance().setTransportFactory(new DefaultTransportFactory());

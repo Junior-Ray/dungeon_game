@@ -19,7 +19,7 @@ public class AssetManager {
 
     private static AssetManager instance;
 
-    private final Map<String, Image> imageCache = new HashMap();
+    private Map<String, Image> imageCache = new HashMap();
 
     private AssetManager() {
     }
@@ -30,7 +30,9 @@ public class AssetManager {
         }
         return instance;
     }
- 
+    public void reset(){
+        imageCache = new HashMap();
+    }
     public Image getImage(String visualId) {
         if (imageCache.containsKey(visualId)) {
             return imageCache.get(visualId);

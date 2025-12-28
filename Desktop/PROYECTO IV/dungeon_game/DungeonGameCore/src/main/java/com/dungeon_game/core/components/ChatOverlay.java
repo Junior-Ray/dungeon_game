@@ -38,6 +38,7 @@ public class ChatOverlay implements Updater{
     private static final int CY = 110;
     private static final int CW = 420;
     private static final int CH = 480;
+    private Object subToken;
 
     // Canvas del chat
     private final Imagen chatCanvas;
@@ -212,16 +213,19 @@ public class ChatOverlay implements Updater{
         RenderProcessor.getInstance().setElement(chatInput);
         RenderProcessor.getInstance().setElement(btnSend);
         chatInput.setEnabled(true);
-        ClientMessageBus.getInstance().start();
-        ClientMessageBus.getInstance().subscribe(
-            line -> line != null && (
-                line.startsWith("[GLOBAL]") ||
-                line.startsWith("[PARTY]")  ||
-                line.startsWith("[PM]")     ||
-                line.startsWith("[SERVER]")
-            ),
-            this::onBusLine
-        );
+        if (subToken == null) {
+            ClientMessageBus.getInstance().start();
+            ClientMessageBus.getInstance().subscribe(
+                line -> line != null && (
+                    line.startsWith("[GLOBAL]") ||
+                    line.startsWith("[PARTY]")  ||
+                    line.startsWith("[PM]")     ||
+                    line.startsWith("[SERVER]")
+                ),
+                this::onBusLine
+            );
+        }
+        
 
         // Si quieres que los clicks del juego no molesten mientras escribes, puedes subir la capa mínima
         //InterpreterEvent.getInstance().setMinActiveLayer(6);

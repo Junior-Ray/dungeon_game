@@ -43,7 +43,8 @@ public class ConnectionManager {
     }
     
     public void start(){
-        try (ServerSocket serverSocket = new ServerSocket(port)) {
+        try {
+            this.serverSocket = new ServerSocket(port);
             System.out.println("[Server] Escuchando en el puerto " + port);
 
             while (running) {

@@ -8,21 +8,21 @@ public enum SoundEffect {
     // UI Sounds
     BUTTON_CLICK("ui_click"),
     BUTTON_HOVER("ui_hover"),
-    MENU_OPEN("menu_open"),
+    ENTRY_LOBBY("entry_lobby"),
     MENU_CLOSE("menu_close"),
     
     // Combat Sounds
-    SWORD_SLASH("sword_slash"),
-    SWORD_HIT("sword_hit"),
+    ATTACK_LIGHT("atk_light"),
+    ATTACK_HEAVY("atk_heavy"),
+    ATTACK_DASH("atk_dash"),
     ENEMY_HIT("enemy_damage"),
     ENEMY_DEATH("enemy_death"),
     PLAYER_DAMAGE("player_hurt"),
     PLAYER_DEATH("player_death"),
     
     // Environment Sounds
-    DOOR_OPEN("door_open"),
-    DOOR_CLOSE("door_close"),
-    CHEST_OPEN("chest_open"),
+    JUMP("jump"),
+    LANDING("landing"),
     FOOTSTEP("footstep"),
     
     // Item Sounds

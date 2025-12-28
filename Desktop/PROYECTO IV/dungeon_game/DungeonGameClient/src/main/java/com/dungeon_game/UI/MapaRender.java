@@ -12,6 +12,7 @@ import java.awt.Graphics2D;
 import java.awt.Image;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.util.Queue;
 
 /**
  *
@@ -20,77 +21,77 @@ import java.awt.image.BufferedImage;
  */
 public class MapaRender {
 
-    private static int CANVAS_WIDTH = 1280;
-    private static int CANVAS_HEIGHT = 720;
+    private final int CANVAS_WIDTH;
+    private final int CANVAS_HEIGHT;
+
+    private final BufferedImage finalImage;
+    private final Graphics2D g2d;
 
     public MapaRender(int width, int height) {
         this.CANVAS_WIDTH = width;
         this.CANVAS_HEIGHT = height;
 
-    }
-
-    public BufferedImage renderSala() {
-        BufferedImage finalImage = new BufferedImage(
+        // 🔹 Crear UNA SOLA VEZ
+        this.finalImage = new BufferedImage(
                 CANVAS_WIDTH,
                 CANVAS_HEIGHT,
                 BufferedImage.TYPE_INT_ARGB
         );
 
-        Graphics2D g2d = finalImage.createGraphics();
+        this.g2d = finalImage.createGraphics();
 
-        // Calidad alta
+        // 🔹 Hints UNA SOLA VEZ
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
         g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+    }
 
-        DriverRender driver = DriverRender.getInstance();
+    public BufferedImage renderSala() {
 
-        while (driver.hasNext()) {
-
-            VisualRenderable renderData = driver.nextElement();
-            Image img=getImage(renderData);
-
-            if (img == null) continue;
-
-            int screenX = renderData.getRenderX();
-            int screenY = renderData.getRenderY();
-            int screenW = renderData.getWidth();
-            int screenH = renderData.getHeight();
-            int opacity = renderData.getOpacity(); // 0 - 255
-
-            float alpha = Math.max(0f, Math.min(1f, opacity / 255f));
-
-            // Aplica opacidad
-            g2d.setComposite(AlphaComposite.getInstance(
-                    AlphaComposite.SRC_OVER,
-                    alpha
-            ));
-
-            // Dibujar imagen con opacidad
-            g2d.drawImage(img, screenX, screenY, screenW, screenH, null);
-        }
-
-        // Reset a transparencia normal
+        // 🔹 Limpiar buffer (en lugar de crear uno nuevo)
+        g2d.setComposite(AlphaComposite.Clear);
+        g2d.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         g2d.setComposite(AlphaComposite.SrcOver);
 
-        // Fin
-        driver.resetTransverse();
-        g2d.dispose();
+
+        Queue<VisualRenderable> driver = DriverRender.getInstance().obtenerCola();
+        while (!driver.isEmpty()) {
+
+            VisualRenderable renderData = driver.poll();
+            Image img = getImage(renderData);
+            if (img == null) continue;
+
+            int x = renderData.getRenderX();
+            int y = renderData.getRenderY();
+            int w = renderData.getWidth();
+            int h = renderData.getHeight();
+
+            float alpha = Math.max(0f, Math.min(1f, renderData.getOpacity() / 255f));
+            g2d.setComposite(
+                    AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha)
+            );
+
+            g2d.drawImage(img, x, y, w, h, null);
+        }
+
+        g2d.setComposite(AlphaComposite.SrcOver);
 
         return finalImage;
     }
-    private Image getImage(VisualRenderable obj){
+
+    private Image getImage(VisualRenderable obj) {
         String visualId = obj.getVisualId();
-        if(visualId==null) return obj.getImage();
-        Image img =AssetManager.getInstance().getImage(visualId);
-        
-        if(obj instanceof CroppedImage){
+        if (visualId == null) return obj.getImage();
+
+        Image img = AssetManager.getInstance().getImage(visualId);
+
+        if (obj instanceof CroppedImage) {
             CroppedImage.Scrap o = ((CroppedImage) obj).getScrap();
-            img= AssetManager.getInstance().getImage(img, o.getX(), o.getY(), o.getWitdh(), o.getHeight());
+            img = AssetManager.getInstance().getImage(
+                    img, o.getX(), o.getY(), o.getWitdh(), o.getHeight()
+            );
         }
-        
-        
         return img;
     }
 }

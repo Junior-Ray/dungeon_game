@@ -6,6 +6,7 @@ package com.dungeon_game.core.logic;
 
 import com.dungeon_game.core.api.InputMouse;
 import com.dungeon_game.core.components.AbstractUIComponent;
+import com.dungeon_game.core.data.ClickOn;
 import com.dungeon_game.core.data.SpatialGrid;
 import com.dungeon_game.core.data.VisualRender;
 import java.awt.Point;
@@ -20,6 +21,7 @@ public class InterpreterEvent {
     private static final int MIN_LAYER = 0;
     private static final int MAX_LAYER = 9;
     private int minActiveLayer = MIN_LAYER;
+    private VisualRender prioridad = null;
     private int capa=1;
     
     private InterpreterEvent(){};
@@ -52,11 +54,11 @@ public class InterpreterEvent {
                 return; 
             }
             // Usamos la referencia 'actual' que fue establecida en handleMousePosition()
-            if (actual instanceof AbstractUIComponent comp) {
+            if (actual instanceof ClickOn c) {
                 // Si el objeto actual (en hover) es un componente UI, es seguro llamarlo.
                 //System.out.println("Que raro");
-                UIFocus.setFocus(comp);
-                comp.executeClickAction();
+                UIFocus.setFocus(actual);
+                c.executeClickAction();
                 
                
             } else if (actual != null) {
@@ -64,9 +66,21 @@ public class InterpreterEvent {
             } else {
                 // Caso donde se clica el vacío (e.g., deseleccionar todo)
                
-               UIFocus.setFocus(null);
             }
+            if (UIFocus.getFocus() != prioridad) {
+                UIFocus.setFocus(prioridad);
+                return;
+            }
+            if(UIFocus.getFocus() instanceof ClickOn c) c.executeClickAction();
         }
+    }
+
+    public VisualRender getPrioridad() {
+        return prioridad;
+    }
+
+    public void setPrioridad(VisualRender prioridad) {
+        this.prioridad = prioridad;
     }
     
     /**

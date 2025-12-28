@@ -4,17 +4,21 @@
  */
 package com.dungeon_game.core.api;
 
+import com.dungeon_game.core.audio.MusicTrack;
+import com.dungeon_game.core.audio.SoundEffect;
+
 public interface AudioPlayer {
-    void playMusic(String musicId, boolean loop);
+    // Música
+    void playMusic(MusicTrack track, boolean loop);
     void stopMusic();
     void pauseMusic();
     void resumeMusic();
-    void setMusicVolume(float volume); // 0.0f a 1.0f
-    float getMusicVolume();
+    void setMusicVolume(float volume);
     
-    void playSound(String soundId);
+    // Sonidos (SFX) - Ahora usa el Enum SoundEffect
+    void playSound(SoundEffect effect);
     void setSoundVolume(float volume);
-    float getSoundVolume();
     
     boolean isMusicPlaying();
+    void dispose();
 }

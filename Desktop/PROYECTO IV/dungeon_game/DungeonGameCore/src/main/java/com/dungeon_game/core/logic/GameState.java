@@ -4,7 +4,7 @@
  */
 package com.dungeon_game.core.logic;
 
-import com.dungeon_game.core.api.DriverRender;
+
 import com.dungeon_game.core.api.RenderProcessor;
 import com.dungeon_game.core.api.Updater;
 import com.dungeon_game.core.auth.ITokenStorage; // <--- NUEVO: Importar la interfaz
@@ -15,7 +15,8 @@ import com.dungeon_game.core.model.Sala;
 import com.dungeon_game.core.net.GameTransport;
 import com.dungeon_game.core.net.TransportFactory;
 import com.dungeon_game.core.structures.DungeonGraph;
-import com.dungeon_game.core.structures.NodoSala;
+import com.dungeon_game.core.logic.NodoSala;
+import com.dungeon_game.core.model.Escenario1;
 import java.util.ArrayList;
 
 import java.util.List;
@@ -58,9 +59,9 @@ public class GameState {
         return authToken; 
     }
     private  DungeonGraph mapa;
-    private NodoSala salaActual;
-    private Sala actual;
-    private ListaSala lista;
+    private static NodoSala salaActual;
+    private static Sala actual;
+    private static ListaSala lista;
     private static GameState instance;
     private boolean cambioSala = true;
     /*No sé como funciona, pero implementare Singleton, cambia de logica
@@ -78,21 +79,26 @@ public class GameState {
     */
     public GameState(){};
     
-    public static GameState getInstance(){
-        if(instance==null){
-            instance= new GameState();
-            instance.lista= new ListaSala();
-            instance.setActual(Loader.getInstance());   
-            instance.lista.agregar(Loader.getInstance());
-            instance.lista.agregar(Lobby.getInstance());
-//            Loader.getInstance().cargarIniciales(); 
-            
-            ChangeSala.getInstance().startAnimation(1280,720);
+    public static GameState getInstance() {
+        if (instance == null) {
+            instance = new GameState();
+            instance.lista = new ListaSala();
+            agregarSalas();
+            Escenario1.getInstance().cargarIniciales();
+            ChangeSala.getInstance().startAnimation(1280, 720);
         }
         return instance;
     }
-    
 
+    
+    private static void agregarSalas() {
+        instance.setActual(Loader.getInstance());
+        
+        lista.agregar(Loader.getInstance());
+        lista.agregar(Lobby.getInstance());
+        lista.agregar(Escenario1.getInstance());
+        salaActual = lista.getCabeza();
+    }
     // --- NUEVO: Métodos para manejar el almacenamiento ---
     public void setTokenStorage(ITokenStorage tokenStorage) {
         this.tokenStorage = tokenStorage;
@@ -144,7 +150,8 @@ public class GameState {
         
     
     }
-    /** Salas vecinas a la sala actual (las que se pueden alcanzar en un movimiento). */
+
+    /** Salas vecinas a la sala actual (las que se pueden alcanzar en un movimiento). 
     public List<NodoSala> getSalasVecinas() {
         return mapa.getVecinos(salaActual.getIdSala());
     }
@@ -153,7 +160,7 @@ public class GameState {
      * Intenta mover al jugador a la sala indicada por id.
      * Devuelve true si el movimiento es válido (hay conexión y no está bloqueada).
      */
-    public boolean moverA(String idDestino) {
+    /*public boolean moverA(String idDestino) {
         if (idDestino == null || idDestino.isBlank()) {
             return false;
         }
@@ -173,11 +180,11 @@ public class GameState {
         this.salaActual = destino;
         destino.marcarComoVisitada();
         return true;
-    }
+    } 
     public void forzarMoverA(NodoSala sala) {
         this.salaActual = sala;
     }
-
+*/
     public void setActual(Sala actual) {
         this.actual = actual;
     }
